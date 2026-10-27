@@ -95,10 +95,15 @@ import { isMiddleScreen } from '@/helper/utils'
 import { fetchProxies } from '@/assembly/proxies'
 import { isSidebarCollapsed } from '@/store/settings'
 import { activeBackend, activeUuid } from '@/store/setup'
+import { refreshStatsLabels } from '@/store/traffic-stats'
+import { useIntervalFn } from '@vueuse/core'
 import { useDocumentVisibility, useElementBounding } from '@vueuse/core'
 import { ref, watch } from 'vue'
 import { RouterView, useRouter } from 'vue-router'
 
+useIntervalFn(() => {
+  if (document.visibilityState === 'visible') void refreshStatsLabels()
+}, 60000)
 const router = useRouter()
 const { swiperRef, pageRef, onPageBeforeLeave } = useSwipeRouter()
 const sidebarLayoutCollapsed = ref(isSidebarCollapsed.value)

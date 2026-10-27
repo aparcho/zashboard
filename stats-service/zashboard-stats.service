@@ -1,0 +1,22 @@
+[Unit]
+Description=Zashboard SQLite 统计服务
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zashboard-stats
+Group=zashboard-stats
+WorkingDirectory=/opt/zashboard
+ExecStart=/usr/bin/python3 /opt/zashboard/stats-service/service.py --config /opt/zashboard/stats-service/config.json
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/zashboard/stats-service/data
+
+[Install]
+WantedBy=multi-user.target

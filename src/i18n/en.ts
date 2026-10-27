@@ -1,4 +1,5 @@
 const en = {
+  trafficStats: '流量统计',
   setup: 'Setup',
   overview: 'Overview',
   proxies: 'Proxies',

@@ -1,6 +1,7 @@
 import type { LANG_MESSAGE } from './en'
 
 const ru: LANG_MESSAGE = {
+  trafficStats: '流量统计',
   setup: 'Настройка',
   overview: 'Обзор',
   proxies: 'Прокси',

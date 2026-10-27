@@ -1,3 +1,5 @@
+> 本 Fork 新增 SQLite 持续流量统计、设备 IP 绑定和 VPS 映射。部署与统计口径见 [统计服务说明](docs/统计服务.md)。保留上游更新能力，定制构建通过独立 CI 验证。
+
 # zashboard
 
 <p align="center">

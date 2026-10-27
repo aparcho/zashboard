@@ -244,6 +244,7 @@ export enum TUN_STACK {
 }
 
 export enum ROUTE_NAME {
+  trafficStats = 'trafficStats',
   overview = 'overview',
   proxies = 'proxies',
   connections = 'connections',
@@ -254,6 +255,7 @@ export enum ROUTE_NAME {
 }
 
 export const ROUTE_ICON_MAP = {
+  [ROUTE_NAME.trafficStats]: Squares2X2Icon,
   [ROUTE_NAME.overview]: Squares2X2Icon,
   [ROUTE_NAME.proxies]: GlobeAltIcon,
   [ROUTE_NAME.connections]: ArrowsRightLeftIcon,
