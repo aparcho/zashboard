@@ -273,10 +273,10 @@ try {
     check(
       (await waitFor(() =>
         page.evaluate(
-          `document.querySelector('thead')?.innerText.includes('主机名') && document.querySelector('thead')?.innerText.includes('源IP')`,
+          `document.querySelector('thead')?.innerText.includes('源主机') && document.querySelector('thead')?.innerText.includes('源IP')`,
         ),
       )) !== null,
-      '连接表格独立显示主机名与源 IP 列',
+      '连接表格独立显示源主机与源 IP 列',
     )
     check(
       (await waitFor(() =>
@@ -291,7 +291,7 @@ try {
       (await waitFor(() =>
         page.evaluate(`document.querySelector('.modal-open')?.innerText.includes('设备绑定')`),
       )) !== null,
-      '主机名单元格就地打开设备绑定',
+      '源主机单元格就地打开设备绑定',
     )
     await page.evaluate(
       `(() => { const input=document.querySelector('.modal-open input[placeholder="例如：工作电脑"]'); input.value='改名 Mac'; input.dispatchEvent(new Event('input',{bubbles:true})); })()`,
@@ -301,7 +301,7 @@ try {
       (await waitFor(() =>
         page.evaluate(`document.querySelector('tbody')?.innerText.includes('改名 Mac')`),
       )) !== null,
-      '就地保存后连接表格立即更新主机名',
+      '就地保存后连接表格立即更新源主机',
     )
     check((await request('devices'))[0].id === devices[0].id, '就地编辑保留原设备身份与历史关联')
     await page.call('Emulation.setDeviceMetricsOverride', {
@@ -344,7 +344,7 @@ try {
           `document.querySelector('.modal-open')?.innerText.includes('改名 Mac') && document.querySelector('.modal-open')?.innerText.includes('192.168.1.2')`,
         ),
       )) !== null,
-      '连接页工具栏直接查看主机名与 IP 月度用量',
+      '连接页工具栏直接查看源主机与 IP 月度用量',
     )
     await page.call('Emulation.setDeviceMetricsOverride', {
       width: 390,

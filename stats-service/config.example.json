@@ -11,5 +11,7 @@
   "retention_days": 90,
   "database": "stats-service/data/stats.sqlite3",
   "static_dir": "dist",
-  "allowed_origins": ["http://localhost:5173"]
+  "allowed_origins": ["http://localhost:5173"],
+  "host_refresh_interval": 60,
+  "router_dhcp": null
 }

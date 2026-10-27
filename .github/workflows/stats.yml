@@ -31,6 +31,7 @@ jobs:
             dist/
             stats-service/service.py
             stats-service/discovery.py
+            stats-service/router_dhcp.py
             stats-service/config.example.json
             stats-service/zashboard-stats.service
             stats-service/openwrt.init

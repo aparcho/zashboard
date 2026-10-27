@@ -159,9 +159,11 @@ class HostDiscovery(threading.Thread):
 
     def run(self):
         while not self.stop.is_set():
+            started=time.monotonic()
             try:self.refresh()
-            except Exception:pass
-            self.stop.wait(300)
+            except Exception:
+                print('源主机同步暂不可用，保留上次名称',flush=True)
+            self.stop.wait(max(1,float(self.config.get('host_refresh_interval',60))-(time.monotonic()-started)))
 
     def refresh(self):
         links=neighbors()
@@ -173,7 +175,28 @@ class HostDiscovery(threading.Thread):
                 address=ipaddress.ip_address(source)
                 if not address.is_loopback and (address.is_private or source in links):addresses.append(str(address))
             except ValueError:pass
-        found=local_names();origins={address:'租约/本地主机表' for address in found}
+        router=self.config.get('router_dhcp')
+        if router:
+            from router_dhcp import fetch_router_dhcp
+            try:
+                records=fetch_router_dhcp(router)
+                if self.stop.is_set():return
+                with self.store.lock,self.store.db:
+                    self.store.set_meta('router_dhcp_cache',records)
+                    self.store.set_meta('router_dhcp_synced_at',time.time())
+                    self.store.set_meta('router_dhcp_error_at',None)
+            except Exception:
+                if self.stop.is_set():return
+                with self.store.lock,self.store.db:
+                    records=self.store.meta('router_dhcp_cache',[])
+                    self.store.set_meta('router_dhcp_error_at',time.time())
+            # 路由器 DHCP 的 MAC/IP 关系为名称权威来源；邻居表只补充同 MAC 的其他地址。
+            links.update({r['ip']:r['mac'] for r in records})
+            addresses=list(set(addresses)|{r['ip'] for r in records})
+            found={r['ip']:r['name'] for r in records}
+            origins={r['ip']:'主路由 DHCP' for r in records}
+        else:
+            found=local_names();origins={address:'租约/本地主机表' for address in found}
         pending=[address for address in addresses if address not in found]
         try:
             for address,name in mdns_names(pending,self.config.get('listen')).items():
@@ -181,27 +204,11 @@ class HostDiscovery(threading.Thread):
         except OSError:pass
         def publish():
             by_mac={links[a]:n for a,n in found.items() if a in links and clean_name(n)}
+            primary={r['mac']:r['name'] for r in records} if router else {}
+            by_mac.update(primary)
             for address,mac in links.items():
-                if address not in found and mac in by_mac:
-                    found[address]=by_mac[mac];origins[address]='同 MAC 地址关联'
-            records=[{'ip':a,'name':clean_name(n),'mac':links.get(a,''),'source':origins.get(a,'本地主机表')} for a,n in found.items() if a in addresses and clean_name(n)]
-            self.store.discover_hosts(records,links)
-        publish()
-        server=self.config.get('lan_dns')
-        if not server:
-            try:
-                route=subprocess.check_output(['ip','-4','route','show','default'],text=True,timeout=2)
-                match=re.search(r'\bvia\s+(\d+\.\d+\.\d+\.\d+)',route);server=match.group(1) if match else None
-            except (OSError,subprocess.SubprocessError):pass
-        for address in pending:
-            if self.stop.is_set():return
-            if address in found:continue
-            name=None
-            if server:
-                try:name=dns_name(address,server)
-                except (OSError,ValueError):pass
-            if not name and ':' not in address:
-                try:name=netbios_name(address)
-                except OSError:pass
-            if name:found[address]=name;origins[address]='局域网名称查询'
+                if mac in by_mac and (address not in found or (mac in primary and not origins.get(address,'').startswith('主路由 DHCP'))):
+                    found[address]=by_mac[mac];origins[address]=('主路由 DHCP' if mac in primary else next((origins[a] for a in found if links.get(a)==mac and a in origins),'mDNS'))+'（同 MAC）'
+            published=[{'ip':a,'name':clean_name(n),'mac':links.get(a,''),'source':origins.get(a,'本地主机表')} for a,n in found.items() if a in addresses and clean_name(n)]
+            self.store.discover_hosts(published,links)
         publish()

@@ -105,7 +105,7 @@ import { RouterView, useRouter } from 'vue-router'
 
 useIntervalFn(() => {
   if (document.visibilityState === 'visible') void refreshStatsLabels()
-}, 60000)
+}, 10000)
 useIntervalFn(
   () => {
     if (document.visibilityState === 'visible') void refreshGroupTotals()

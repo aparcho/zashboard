@@ -15,7 +15,7 @@
         <input
           v-model="search"
           class="input input-sm min-w-32 flex-1"
-          placeholder="主机名 / IP"
+          placeholder="源主机 / IP"
           aria-label="筛选设备用量"
         />
         <button
@@ -37,7 +37,7 @@
         <table class="table-sm table w-full table-fixed text-xs whitespace-nowrap md:text-sm">
           <thead>
             <tr>
-              <th class="w-2/5">主机名 / IP</th>
+              <th class="w-2/5">源主机 / IP</th>
               <th class="text-right">下载</th>
               <th class="text-right">上传</th>
               <th class="text-right">合计</th>

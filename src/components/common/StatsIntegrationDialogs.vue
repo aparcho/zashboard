@@ -60,7 +60,7 @@
     >
       <p class="break-all opacity-60">来源 IP：{{ deviceEditorIP }}</p>
       <label class="flex flex-col gap-1"
-        >主机名<input
+        >源主机<input
           v-model="deviceName"
           class="input w-full"
           required

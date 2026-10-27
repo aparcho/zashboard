@@ -240,7 +240,7 @@ class Store:
                 current = self.db.execute('SELECT device FROM bindings WHERE ip=? AND until IS NULL', (address,)).fetchone()
                 current_id = current[0] if current else None
                 origin = self.db.execute('SELECT origin FROM device_origins WHERE device=?', (current_id,)).fetchone()
-                if current_id and (not origin or origin[0] == 'manual'):
+                if current_id and (not origin or origin[0] == 'manual') and not str(found.get(address,{}).get('source','')).startswith('主路由 DHCP'):
                     continue
                 record = found.get(address)
                 mac = links.get(address, '')
@@ -249,6 +249,8 @@ class Store:
                     self.db.execute('UPDATE bindings SET until=? WHERE ip=? AND until IS NULL', (now,address))
                     current_id = None
                 if not record:
+                    if current_id and origin and origin[0].startswith('主路由 DHCP'):
+                        self.db.execute('UPDATE bindings SET until=? WHERE ip=? AND until IS NULL',(now,address))
                     continue
                 name = text(record['name'],100)
                 if not name:
@@ -431,6 +433,10 @@ def make_handler(store, config):
                         last = checkpoint['at'] if checkpoint else None
                         self.reply(200, dict(source_id=config['source_id'], controller_label=config.get('controller_label', ''),
                             auth_required=config.get('require_auth', False),
+                            hostname_source='router-dhcp-mdns' if config.get('router_dhcp') else 'local-mdns',
+                            host_refresh_interval=config.get('host_refresh_interval',60),
+                            router_dhcp_synced_at=store.meta('router_dhcp_synced_at'),
+                            router_dhcp_error_at=store.meta('router_dhcp_error_at'),
                             last_sample=last, last_error_at=store.meta('last_error_at'), interval=config['interval'],
                             healthy=bool(last and time.time()-last < max(5, config['interval']*3) and not store.meta('interrupted', False)),
                             retention_days=store.retention, sampling=True))
@@ -535,7 +541,7 @@ def main():
         stop.set()
         collector.join(timeout=12)
         if discovery:
-            discovery.join(timeout=5)
+            discovery.join(timeout=10)
         server.server_close()
         with store.lock:
             store.db.close()
