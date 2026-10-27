@@ -45,12 +45,11 @@
           :mobile="true"
         />
       </div>
-      <div
+      <ProxyGroupSpeed
         v-if="!twoColumnProxyGroup || displayContent"
-        class="text-base-content/40 mr-2 min-w-12 shrink-0 text-right text-xs tabular-nums"
-      >
-        {{ prettyBytesHelper(downloadTotal) }}/s
-      </div>
+        :name="name"
+        class="mr-2"
+      />
       <LatencyTag
         :class="twMerge('bg-base-200/40 hover:bg-base-200/70 z-10')"
         :loading="isLatencyTesting"
@@ -73,11 +72,9 @@
 import { hiddenGroupMap } from '@/store/proxies'
 import { useKeyboardShortcuts } from '@/composables/use-keyboard'
 import { KEYBOARD_SHORTCUT_ACTION } from '@/helper/keyboard'
-import { getDownloadSpeedByProxyGroup } from '@/helper/proxy-group-traffic'
 import { isHiddenGroup } from '@/helper'
 import { proxyMap } from '@/assembly/proxies'
 import { useTooltip } from '@/composables/use-tooltip'
-import { prettyBytesHelper } from '@/helper/utils'
 import { manageHiddenGroup, twoColumnProxyGroup } from '@/store/settings'
 import { twMerge } from 'tailwind-merge'
 import { computed } from 'vue'
@@ -88,6 +85,7 @@ import ProxyGroupFilter from './ProxyGroupFilter.vue'
 import ProxyGroupNow from './ProxyGroupNow.vue'
 import ProxyIcon from './ProxyIcon.vue'
 import ProxyGroupTraffic from './ProxyGroupTraffic.vue'
+import ProxyGroupSpeed from './ProxyGroupSpeed.vue'
 
 const props = defineProps<{
   name: string
@@ -104,8 +102,6 @@ const { t } = useI18n()
 const { getShortcutKey } = useKeyboardShortcuts()
 const { showTip } = useTooltip()
 const proxyGroup = computed(() => proxyMap.value[props.name])
-
-const downloadTotal = computed(() => getDownloadSpeedByProxyGroup(props.name))
 
 const hiddenGroup = computed({
   get: () => Boolean(isHiddenGroup(props.name)),

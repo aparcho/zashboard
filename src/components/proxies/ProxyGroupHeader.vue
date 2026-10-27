@@ -44,9 +44,7 @@
     <div class="flex flex-1 items-center gap-2 truncate text-sm">
       <ProxyGroupNow :name="name" />
     </div>
-    <div class="text-base-content/40 min-w-12 shrink-0 text-right text-xs tabular-nums">
-      {{ prettyBytesHelper(downloadTotal) }}/s
-    </div>
+    <ProxyGroupSpeed :name="name" />
   </div>
 </template>
 
@@ -54,11 +52,9 @@
 import { hiddenGroupMap } from '@/store/proxies'
 import { useKeyboardShortcuts } from '@/composables/use-keyboard'
 import { KEYBOARD_SHORTCUT_ACTION } from '@/helper/keyboard'
-import { getDownloadSpeedByProxyGroup } from '@/helper/proxy-group-traffic'
 import { isHiddenGroup } from '@/helper'
 import { checkTruncation } from '@/helper/tooltip'
 import { useTooltip } from '@/composables/use-tooltip'
-import { prettyBytesHelper } from '@/helper/utils'
 import { proxyMap } from '@/assembly/proxies'
 import { manageHiddenGroup, proxyGroupIconMargin, proxyGroupIconSize } from '@/store/settings'
 import { twMerge } from 'tailwind-merge'
@@ -70,6 +66,7 @@ import ProxyGroupFilter from './ProxyGroupFilter.vue'
 import ProxyGroupNow from './ProxyGroupNow.vue'
 import ProxyName from './ProxyName.vue'
 import ProxyGroupTraffic from './ProxyGroupTraffic.vue'
+import ProxyGroupSpeed from './ProxyGroupSpeed.vue'
 
 const props = defineProps<{
   name: string
@@ -85,8 +82,6 @@ const { t } = useI18n()
 const { getShortcutKey } = useKeyboardShortcuts()
 const { showTip } = useTooltip()
 const proxyGroup = computed(() => proxyMap.value[props.name])
-
-const downloadTotal = computed(() => getDownloadSpeedByProxyGroup(props.name))
 
 const hiddenGroup = computed({
   get: () => Boolean(isHiddenGroup(props.name)),
