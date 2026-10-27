@@ -1,4 +1,6 @@
 const en = {
+  trafficStatistics: '累计统计连接',
+  clientHostname: '主机名',
   trafficStats: '流量统计',
   setup: 'Setup',
   overview: 'Overview',

@@ -36,6 +36,18 @@
       </div>
     </template>
 
+    <SettingItem
+      v-if="isVisibleTrafficStats"
+      :setting-key="k.trafficStatistics"
+    >
+      <div class="setting-item-label">累计统计连接</div>
+      <button
+        class="btn btn-sm"
+        @click="statsSettingsOpen = true"
+      >
+        设置
+      </button>
+    </SettingItem>
     <template v-if="hasVisibleActions">
       <div class="settings-section-label">{{ $t('settingsSectionCoreOperations') }}</div>
       <div class="settings-grid">
@@ -202,10 +214,12 @@ import { TUN_STACK } from '@/constant'
 import { notifyRequestError } from '@/helper/request-error'
 import { autoUpgradeCore, checkUpgradeCore } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
+import { statsSettingsOpen } from '@/store/traffic-stats'
 import { computed } from 'vue'
 
 const k = BACKEND_ITEM_KEYS
 
+const isVisibleTrafficStats = useIsSettingVisible(k.trafficStatistics)
 const isVisibleBackendSwitch = useIsSettingVisible(k.backend)
 const isVisiblePorts = useIsSettingVisible(k.ports)
 const isVisibleTunMode = useIsSettingVisible(k.tunMode)
@@ -262,6 +276,7 @@ const hasVisibleUpgradeSettings = computed(
 )
 const hasVisibleItems = computed(
   () =>
+    isVisibleTrafficStats.value ||
     isVisibleBackendSwitch.value ||
     hasVisibleActions.value ||
     hasVisibleNetworkSettings.value ||

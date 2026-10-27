@@ -410,10 +410,39 @@ export const connectionTableColumns = useStorage<CONNECTIONS_TABLE_ACCESSOR_KEY[
     CONNECTIONS_TABLE_ACCESSOR_KEY.ConnectTime,
   ],
 )
+// One-time additive migration: preserve the user's column order and later hide/show choices.
+const hostnameColumnMigrated = useStorage('stats/hostname-column-migrated', false)
+if (!hostnameColumnMigrated.value) {
+  const columns = [...connectionTableColumns.value]
+  if (!columns.includes(CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP))
+    columns.push(CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP)
+  if (!columns.includes(CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname))
+    columns.splice(
+      columns.indexOf(CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP),
+      0,
+      CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname,
+    )
+  connectionTableColumns.value = columns
+  hostnameColumnMigrated.value = true
+}
 export const connectionCardLines = useStorage<CONNECTIONS_TABLE_ACCESSOR_KEY[][]>(
   'config/connection-card-lines',
   DETAILED_CARD_STYLE,
 )
+
+const hostnameCardMigrated = useStorage('stats/hostname-card-migrated', false)
+if (!hostnameCardMigrated.value) {
+  if (
+    !connectionCardLines.value.some((line) =>
+      line.includes(CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname),
+    )
+  )
+    connectionCardLines.value = [
+      ...connectionCardLines.value,
+      [CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname, CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP],
+    ]
+  hostnameCardMigrated.value = true
+}
 
 export const sourceIPLabelList = useStorage<SourceIPLabel[]>('config/source-ip-label-list', [])
 export const resolveClientHostname = useStorage('config/resolve-client-hostname', false)

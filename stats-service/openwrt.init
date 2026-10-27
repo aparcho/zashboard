@@ -9,6 +9,7 @@ start_service() {
     procd_set_param command /usr/bin/python3 /opt/zashboard-stats/service.py --config /etc/zashboard-stats/config.json
     procd_set_param env PYTHONDONTWRITEBYTECODE=1
     procd_set_param respawn 3600 5 5
+    procd_set_param term_timeout 20
     procd_set_param file /etc/zashboard-stats/config.json
     procd_set_param stdout 1
     procd_set_param stderr 1

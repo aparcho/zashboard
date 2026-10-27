@@ -34,6 +34,10 @@ export type StatsSummary = {
 
 const configs = useStorage<Record<string, StatsConfig>>('stats/service-configs', {})
 export const statsConfig = computed(() => configs.value[activeBackend.value?.uuid ?? ''])
+const rememberedTokens = useStorage<Record<string, string>>('stats/remembered-tokens', {})
+export const remembersStatsToken = computed(
+  () => !!rememberedTokens.value[activeBackend.value?.uuid ?? ''],
+)
 export const statsToken = ref('')
 export const statsDevices = ref<Device[]>([])
 const canonicalIP = (address: string) => {
@@ -51,6 +55,10 @@ export const statsDeviceLabels = computed(
       ),
     ),
 )
+export const getStatsDeviceByIP = (address: string) =>
+  statsDevices.value.find((device) =>
+    device.ips.some((ip) => canonicalIP(ip) === canonicalIP(address)),
+  )
 export const getStatsDeviceLabel = (address: string) =>
   statsDeviceLabels.value.get(canonicalIP(address))
 
@@ -62,6 +70,8 @@ export function saveStatsConfig(config: StatsConfig, token: string) {
   if (!config.sourceId.trim()) throw new Error('请输入采集源 ID')
   configs.value = { ...configs.value, [id]: { url, sourceId: config.sourceId.trim() } }
   statsToken.value = token.trim()
+  if (rememberedTokens.value[id])
+    rememberedTokens.value = { ...rememberedTokens.value, [id]: statsToken.value }
   sessionStorage.setItem(`stats/token/${id}`, statsToken.value)
 }
 
@@ -119,8 +129,89 @@ watch(
   () => activeBackend.value?.uuid,
   (id) => {
     statsDevices.value = []
-    statsToken.value = id ? (sessionStorage.getItem(`stats/token/${id}`) ?? '') : ''
+    statsToken.value = id
+      ? (sessionStorage.getItem(`stats/token/${id}`) ?? rememberedTokens.value[id] ?? '')
+      : ''
     void refreshStatsLabels()
   },
   { immediate: true },
 )
+
+export type GroupTotals = {
+  since: number | null
+  last_sample: number | null
+  healthy: boolean
+  rows: { name: string; upload: number; download: number }[]
+}
+export const groupTotals = ref<GroupTotals | null>(null)
+export const groupTotalsError = ref('')
+export const statsSettingsOpen = ref(false)
+export const deviceEditorIP = ref<string | null>(null)
+export const trafficDetailsGroup = ref<string | null>(null)
+export const groupTotalsMap = computed(
+  () => new Map(groupTotals.value?.rows.map((row) => [row.name, row]) ?? []),
+)
+
+let groupGeneration = 0
+let groupPending: number | null = null
+export async function refreshGroupTotals() {
+  if (groupPending !== null) return
+  const generation = ++groupGeneration
+  if (!statsConfig.value || !statsToken.value) {
+    groupTotals.value = null
+    groupTotalsError.value = ''
+    return
+  }
+  groupPending = generation
+  try {
+    await verifyStatsSource()
+    const totals = await statsRequest<GroupTotals>('group-totals')
+    if (generation !== groupGeneration) return
+    groupTotals.value = totals
+    groupTotalsError.value = ''
+  } catch (e) {
+    if (generation !== groupGeneration) return
+    groupTotalsError.value = e instanceof Error ? e.message : '累计统计暂不可用'
+  } finally {
+    if (groupPending === generation) groupPending = null
+  }
+}
+export function openDeviceEditor(address: string) {
+  if (!statsConfig.value || !statsToken.value) {
+    statsSettingsOpen.value = true
+    return
+  }
+  deviceEditorIP.value = address
+}
+export async function connectIntegratedStats(url: string, token: string, remember: boolean) {
+  const normalized = url.trim().replace(/\/$/, '')
+  if (normalized && !/^https?:\/\//.test(normalized))
+    throw new Error('服务地址必须使用 http:// 或 https://')
+  const id = activeBackend.value?.uuid
+  if (!id) throw new Error('请先选择 Nikki 后端')
+  const response = await fetch(`${normalized}/api/stats/status`, {
+    headers: { Authorization: `Bearer ${token.trim()}` },
+    signal: AbortSignal.timeout(10000),
+    credentials: 'omit',
+    cache: 'no-store',
+  })
+  const status = await response.json()
+  if (!response.ok) throw new Error(status.error || '统计服务连接失败')
+  if (id !== activeBackend.value?.uuid) throw new Error('后端已切换，请重试')
+  if (typeof status.source_id !== 'string' || !status.source_id) throw new Error('统计服务身份无效')
+  saveStatsConfig({ url: normalized, sourceId: status.source_id }, token)
+  if (remember) rememberedTokens.value = { ...rememberedTokens.value, [id]: token.trim() }
+  else {
+    const next = { ...rememberedTokens.value }
+    delete next[id]
+    rememberedTokens.value = next
+  }
+  await Promise.all([refreshGroupTotals(), refreshStatsLabels()])
+}
+watch([() => activeBackend.value?.uuid, statsConfig, statsToken], () => {
+  groupGeneration++
+  groupPending = null
+  groupTotals.value = null
+  groupTotalsError.value = ''
+  void refreshGroupTotals()
+})

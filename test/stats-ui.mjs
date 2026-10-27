@@ -88,9 +88,82 @@ try {
   check(ready !== null, `真实采集服务启动 ${serviceLog}`)
   const page = await harness.openProxiesPage({ settings: { 'config/language': 'zh-CN' } })
   try {
-    await page.evaluate(
-      `localStorage.setItem('stats/service-configs', ${JSON.stringify(JSON.stringify({ perf: { url: base, sourceId: 'test-source' } }))}); sessionStorage.setItem('stats/token/perf', ${JSON.stringify(token)})`,
+    // Enable directly from an original proxy card, without opening the separate stats page.
+    await page.evaluate(`document.querySelector('[data-traffic-group]').click()`)
+    check(
+      (await waitFor(() =>
+        page.evaluate(`!!document.querySelector('.modal-open input[type="password"]')`),
+      )) !== null,
+      '代理卡片就地打开统计连接',
     )
+    await page.evaluate(`(() => {
+      const form=document.querySelector('.modal-open form');
+      for (const [selector,value] of [['input[type="password"]',${JSON.stringify(token)}],['input[placeholder="留空使用当前站点"]',${JSON.stringify(base)}]]) {
+        const input=form.querySelector(selector); input.value=value; input.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+      form.querySelector('input[type="checkbox"]').click();
+    })()`)
+    await page.evaluate(`document.querySelector('.modal-open form').requestSubmit()`)
+    check(
+      (await waitFor(() =>
+        page.evaluate(`document.querySelector('[data-traffic-group]')?.innerText.includes('↓')`),
+      )) !== null,
+      '组卡片直接显示累计上传、下载和合计',
+    )
+    const groupData = await request('group-totals')
+    check(
+      groupData.rows.some((row) => row.name === harness.mock.groupNames[0] && row.download > 0),
+      '多层组累计来自真实 SQLite 数据',
+    )
+    const expandedBefore = await page.evaluate(
+      `document.querySelectorAll('.collapse-motion-open').length`,
+    )
+    await page.evaluate(`document.querySelector('[data-traffic-group]').click()`)
+    check(
+      (await waitFor(() =>
+        page.evaluate(`document.querySelector('.modal-open')?.innerText.includes('开始累计')`),
+      )) !== null,
+      '点击累计值打开组用量详情',
+    )
+    check(
+      (await page.evaluate(`document.querySelectorAll('.collapse-motion-open').length`)) ===
+        expandedBefore,
+      '统计详情不触发原卡片展开',
+    )
+    await page.evaluate(`document.querySelector('.modal-open button[aria-label="close"]').click()`)
+    await page.reload()
+    check(
+      (await waitFor(() =>
+        page.evaluate(`document.querySelector('[data-traffic-group]')?.innerText.includes('↓')`),
+      )) !== null,
+      '记住连接后刷新自动显示卡片累计',
+    )
+    await page.screenshot(join(temp, 'proxy-cards.png'))
+    await page.call('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    })
+    check(
+      (await waitFor(() =>
+        page.evaluate(`document.querySelector('[data-traffic-group]')?.innerText.includes('↓')`),
+      )) !== null,
+      '移动端代理卡片包含累计行',
+    )
+    check(
+      await page.evaluate(
+        `(() => { const b=document.querySelector('[data-traffic-group]'); const card=b?.closest('[data-group-name]'); return !!b && !!card && b.getBoundingClientRect().bottom <= card.getBoundingClientRect().bottom && document.documentElement.scrollWidth <= innerWidth })()`,
+      ),
+      '移动端双列卡片累计行没有被裁切或横向溢出',
+    )
+    await page.screenshot(join(temp, 'proxy-cards-mobile.png'))
+    await page.call('Emulation.setDeviceMetricsOverride', {
+      width: 1440,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false,
+    })
     await page.goto(`${harness.app.url}/#/traffic-stats`)
     await waitFor(() =>
       page.evaluate(`location.hash.includes('traffic-stats') && !!document.querySelector('h1')`),
@@ -193,6 +266,75 @@ try {
         null,
       '原连接列表复用服务端设备名称',
     )
+    await page.evaluate(`localStorage.setItem('config/connection-display-style','table')`)
+    await page.reload()
+    check(
+      (await waitFor(() =>
+        page.evaluate(
+          `document.querySelector('thead')?.innerText.includes('主机名') && document.querySelector('thead')?.innerText.includes('源IP')`,
+        ),
+      )) !== null,
+      '连接表格独立显示主机名与源 IP 列',
+    )
+    check(
+      (await waitFor(() =>
+        page.evaluate(
+          `document.querySelector('tbody')?.innerText.includes('192.168.1.2') && document.querySelector('tbody')?.innerText.includes('验收 Mac')`,
+        ),
+      )) !== null,
+      '原始 IP 与设备名称同时保留',
+    )
+    await page.evaluate(`document.querySelector('[data-device-ip="192.168.1.2"]').click()`)
+    check(
+      (await waitFor(() =>
+        page.evaluate(`document.querySelector('.modal-open')?.innerText.includes('设备绑定')`),
+      )) !== null,
+      '主机名单元格就地打开设备绑定',
+    )
+    await page.evaluate(
+      `(() => { const input=document.querySelector('.modal-open input[placeholder="例如：工作电脑"]'); input.value='改名 Mac'; input.dispatchEvent(new Event('input',{bubbles:true})); })()`,
+    )
+    await page.evaluate(`document.querySelector('.modal-open form').requestSubmit()`)
+    check(
+      (await waitFor(() =>
+        page.evaluate(`document.querySelector('tbody')?.innerText.includes('改名 Mac')`),
+      )) !== null,
+      '就地保存后连接表格立即更新主机名',
+    )
+    check((await request('devices'))[0].id === devices[0].id, '就地编辑保留原设备身份与历史关联')
+    await page.call('Emulation.setDeviceMetricsOverride', {
+      width: 1440,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false,
+    })
+    await page.screenshot(join(temp, 'connection-table.png'))
+    await page.evaluate(`document.querySelector('tbody tr td').click()`)
+    check(
+      (await waitFor(() =>
+        page.evaluate(
+          `!![...document.querySelectorAll('.modal-open button')].find(b=>b.textContent.includes('编辑设备名称与 IP 绑定'))`,
+        ),
+      )) !== null,
+      '原连接详情保留并提供设备绑定入口',
+    )
+    await page.evaluate(
+      `[...document.querySelectorAll('.modal-open button')].find(b=>b.textContent.includes('编辑设备名称与 IP 绑定')).click()`,
+    )
+    check(
+      (await waitFor(() =>
+        page.evaluate(
+          `(() => { const input=document.querySelector('.stats-integration-content input[placeholder="例如：工作电脑"]'); if(!input) return false; const r=input.getBoundingClientRect(); return !!document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('.stats-integration-content') })()`,
+        ),
+      )) !== null,
+      '设备编辑弹层位于原连接详情上方，可正常操作',
+    )
+    await page.evaluate(
+      `document.querySelector('.modal-open:has(.stats-integration-content) button[aria-label="close"]').click()`,
+    )
+    await page.evaluate(
+      `[...document.querySelectorAll('.modal-open button[aria-label="close"]')].forEach(b=>b.click())`,
+    )
     // Configuration mismatch must fail closed rather than quietly displaying another source.
     await page.evaluate(
       `localStorage.setItem('stats/service-configs', ${JSON.stringify(JSON.stringify({ perf: { url: base, sourceId: 'wrong-source' } }))})`,
@@ -216,7 +358,13 @@ try {
     if (process.env.STATS_SCREENSHOT_DIR) {
       const { mkdir, copyFile } = await import('node:fs/promises')
       await mkdir(process.env.STATS_SCREENSHOT_DIR, { recursive: true })
-      for (const name of ['desktop.png', 'mobile.png'])
+      for (const name of [
+        'desktop.png',
+        'mobile.png',
+        'proxy-cards.png',
+        'proxy-cards-mobile.png',
+        'connection-table.png',
+      ])
         await copyFile(join(temp, name), join(process.env.STATS_SCREENSHOT_DIR, name))
     }
   } finally {

@@ -122,6 +122,50 @@ class AccountingTests(unittest.TestCase):
         self.store.sample(payload(3, 6), now=100 + 91 * 86400)
         self.assertEqual(self.query()['rows'], [])
 
+    def test_nested_group_counters_deduplicate_and_survive_node_switch(self):
+        s = self.store
+        s.sample(payload(0, 0), now=100)
+        first = connection(10, 20)
+        first['chains'] = ['node-a', 'HKS', 'Proxy', 'Microsoft', 'HKS']
+        s.sample(payload(10, 20, first), now=101)
+        second = connection(30, 60, id='b')
+        second['chains'] = ['node-b', 'SG', 'Proxy', 'Microsoft']
+        s.sample(payload(40, 80, first, second), now=102)
+        s.sample(payload(40, 80, first, second), now=103)
+        counters = {r['name']: dict(r) for r in s.db.execute('SELECT * FROM chain_totals')}
+        self.assertEqual(counters['HKS']['download'], 20)
+        self.assertEqual(counters['SG']['download'], 60)
+        self.assertEqual(counters['Microsoft']['download'], 80)
+        self.assertEqual(counters['Proxy']['download'], 80)
+        self.assertEqual(self.query()['total']['download'], 80)
+        self.assertEqual(s.meta('chain_since'), 100)
+        # Retention removes minute history, but lifetime card counters remain.
+        s.sample(payload(40, 80), now=100 + 91*86400)
+        self.assertEqual(s.db.execute('SELECT download FROM chain_totals WHERE name=?', ('Microsoft',)).fetchone()[0], 80)
+
+    def test_schema_one_migrates_without_rewriting_history(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as temp:
+            path = str(Path(temp) / 'stats.sqlite3')
+            s = Store(path)
+            s.sample(payload(0, 0), now=100)
+            s.sample(payload(10, 20, connection(10, 20)), now=101)
+            s.db.execute('DROP TABLE chain_totals')
+            s.db.execute("DELETE FROM meta WHERE key='chain_since'")
+            s.db.execute('PRAGMA user_version=1')
+            s.db.commit(); s.db.close()
+            s = Store(path)
+            self.assertEqual(s.db.execute('PRAGMA user_version').fetchone()[0], 2)
+            self.assertEqual(s.db.execute('SELECT COUNT(*) FROM chain_totals').fetchone()[0], 0)
+            s.sample(payload(20, 40, connection(20, 40)), now=102)
+            self.assertEqual(s.db.execute('SELECT download FROM chain_totals WHERE name=?', ('YouTube',)).fetchone()[0], 20)
+            self.assertEqual(s.query({'start':['60'], 'end':['300']})['total']['download'], 40)
+            s.db.close()
+            s = Store(path)
+            self.assertEqual(s.db.execute('SELECT download FROM chain_totals WHERE name=?', ('YouTube',)).fetchone()[0], 20)
+            self.assertEqual(s.meta('chain_since'), 102)
+            s.db.close()
+
 
 class HTTPTests(unittest.TestCase):
     def setUp(self):
@@ -162,6 +206,18 @@ class HTTPTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as error:
             self.request('devices', {'name': 'bad', 'ips': ['invalid']})
         self.assertEqual(error.exception.code, 400)
+
+    def test_group_totals_http_requires_auth_and_returns_chain_counters(self):
+        self.store.sample(payload(0, 0), now=100)
+        self.store.sample(payload(10, 20, connection(10, 20)), now=101)
+        with self.request('group-totals') as response:
+            totals = json.load(response)
+        self.assertEqual(totals['since'], 100)
+        self.assertEqual({r['name']: r['download'] for r in totals['rows']}['YouTube'], 20)
+        with self.assertRaises(HTTPError) as error:
+            self.request('group-totals', token=False)
+        self.assertEqual(error.exception.code, 401)
+        error.exception.close()
 
     def test_static_api_isolation(self):
         with self.assertRaises(HTTPError):

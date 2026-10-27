@@ -63,7 +63,9 @@ class Store:
           download INTEGER NOT NULL, observed_upload INTEGER NOT NULL, observed_download INTEGER NOT NULL,
           samples INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS events(at REAL NOT NULL, kind TEXT NOT NULL);
-        PRAGMA user_version=1;
+        CREATE TABLE IF NOT EXISTS chain_totals(name TEXT PRIMARY KEY, upload INTEGER NOT NULL,
+          download INTEGER NOT NULL);
+        PRAGMA user_version=2;
         ''')
 
     def meta(self, key, default=None):
@@ -86,6 +88,8 @@ class Store:
             if not isinstance(c.get('id'), str) or any(type(c.get(k)) is not int or c[k] < 0 for k in ('upload', 'download')):
                 raise ValueError('连接计数无效')
         with self.lock, self.db:
+            if self.meta('chain_since') is None:
+                self.set_meta('chain_since', now)
             previous = self.meta('checkpoint')
             cold = previous is None
             gap = previous is not None and (now - previous['at'] > max(interval * 3, 5) or now < previous['at'])
@@ -118,6 +122,12 @@ class Store:
                     except ValueError:
                         source = str(m.get('sourceIP') or '本机/未知')[:128]
                     chain = c.get('chains') or []
+                    # Each connection contributes once to every actual chain member.
+                    # Nested groups overlap; never sum these counters into global totals.
+                    for member in set(str(n) for n in chain if isinstance(n, str) and n):
+                        self.db.execute('''INSERT INTO chain_totals VALUES (?,?,?) ON CONFLICT(name)
+                          DO UPDATE SET upload=upload+excluded.upload, download=download+excluded.download''',
+                                        (member, up, down))
                     node = str(chain[0]) if chain else '未知节点'
                     policy = (policies or {}).get((c.get('rule'), c.get('rulePayload')))
                     policy = policy or (str(chain[-1]) if chain else str(c.get('rule') or '未知策略'))
@@ -340,6 +350,13 @@ def make_handler(store, config):
                             last_sample=last, last_error_at=store.meta('last_error_at'), interval=config['interval'],
                             healthy=bool(last and time.time()-last < max(5, config['interval']*3) and not store.meta('interrupted', False)),
                             retention_days=store.retention, sampling=True))
+                    elif path == '/api/stats/group-totals':
+                        checkpoint = store.meta('checkpoint')
+                        self.reply(200, dict(since=store.meta('chain_since'),
+                            last_sample=checkpoint['at'] if checkpoint else None,
+                            healthy=bool(checkpoint and time.time()-checkpoint['at'] < max(5, config['interval']*3)
+                                and not store.meta('interrupted', False)),
+                            rows=[dict(r) for r in store.db.execute('SELECT * FROM chain_totals ORDER BY name')]))
                     elif path == '/api/stats/summary':
                         self.reply(200, store.query(parse_qs(urlsplit(self.path).query)))
                     elif path == '/api/stats/devices':

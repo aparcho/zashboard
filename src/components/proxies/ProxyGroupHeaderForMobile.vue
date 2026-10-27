@@ -1,5 +1,5 @@
 <template>
-  <div class="relative flex h-18 shrink-0 flex-col justify-between">
+  <div class="relative flex min-h-24 shrink-0 flex-col justify-between gap-1">
     <div
       class="text-md truncate"
       :class="proxyGroup.icon && 'pr-10'"
@@ -46,6 +46,7 @@
         @click.stop="emit('latency-test')"
       />
     </div>
+    <ProxyGroupTraffic :name="name" />
     <ProxyIcon
       v-if="proxyGroup?.icon"
       :icon="proxyGroup.icon"
@@ -74,6 +75,7 @@ import LatencyTag from './LatencyTag.vue'
 import ProxyGroupFilter from './ProxyGroupFilter.vue'
 import ProxyGroupNow from './ProxyGroupNow.vue'
 import ProxyIcon from './ProxyIcon.vue'
+import ProxyGroupTraffic from './ProxyGroupTraffic.vue'
 
 const props = defineProps<{
   name: string

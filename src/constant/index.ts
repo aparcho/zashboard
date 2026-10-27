@@ -47,6 +47,7 @@ export enum CONNECTIONS_TABLE_ACCESSOR_KEY {
   Download = 'dl',
   Upload = 'ul',
   ConnectTime = 'connectTime',
+  ClientHostname = 'clientHostname',
   SourceIP = 'sourceIP',
   SourcePort = 'sourcePort',
   SniffHost = 'sniffHost',
@@ -69,6 +70,7 @@ export const CONNECTION_GROUPABLE_KEYS = [
   CONNECTIONS_TABLE_ACCESSOR_KEY.Rule,
   CONNECTIONS_TABLE_ACCESSOR_KEY.Chains,
   CONNECTIONS_TABLE_ACCESSOR_KEY.Outbound,
+  CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname,
   CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP,
   CONNECTIONS_TABLE_ACCESSOR_KEY.SourcePort,
   CONNECTIONS_TABLE_ACCESSOR_KEY.Destination,
@@ -244,12 +246,12 @@ export enum TUN_STACK {
 }
 
 export enum ROUTE_NAME {
-  trafficStats = 'trafficStats',
   overview = 'overview',
   proxies = 'proxies',
   connections = 'connections',
   logs = 'logs',
   rules = 'rules',
+  trafficStats = 'trafficStats',
   settings = 'settings',
   setup = 'setup',
 }

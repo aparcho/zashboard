@@ -35,6 +35,7 @@
       {{ prettyBytesHelper(downloadTotal) }}/s
     </div>
   </div>
+  <ProxyGroupTraffic :name="name" />
 </template>
 
 <script setup lang="ts">
@@ -56,6 +57,7 @@ import LatencyTag from './LatencyTag.vue'
 import ProxyGroupFilter from './ProxyGroupFilter.vue'
 import ProxyGroupNow from './ProxyGroupNow.vue'
 import ProxyName from './ProxyName.vue'
+import ProxyGroupTraffic from './ProxyGroupTraffic.vue'
 
 const props = defineProps<{
   name: string

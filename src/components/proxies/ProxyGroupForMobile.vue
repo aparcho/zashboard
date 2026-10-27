@@ -1,6 +1,6 @@
 <template>
   <div
-    class="group relative h-22 cursor-pointer"
+    class="group relative h-32 cursor-pointer"
     :data-group-name="proxyGroup.name"
     :data-page-swipe-ignore="modalMode || undefined"
     ref="cardWrapperRef"
