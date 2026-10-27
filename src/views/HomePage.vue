@@ -168,6 +168,8 @@ watch(
 watch(documentVisible, () => {
   if (documentVisible.value !== 'visible') return
   fetchProxies()
+  void refreshGroupTotals()
+  void refreshStatsLabels()
 })
 
 checkUIUpdate()

@@ -119,7 +119,7 @@ try {
     await page.evaluate(`document.querySelector('[data-traffic-group]').click()`)
     check(
       (await waitFor(() =>
-        page.evaluate(`document.querySelector('.modal-open')?.innerText.includes('开始累计')`),
+        page.evaluate(`document.querySelector('.modal-open')?.innerText.includes('统计起点')`),
       )) !== null,
       '点击累计值打开组用量详情',
     )
@@ -337,6 +337,35 @@ try {
     await page.evaluate(
       `[...document.querySelectorAll('.modal-open button[aria-label="close"]')].forEach(b=>b.click())`,
     )
+    await page.evaluate(`document.querySelector('button[aria-label="设备用量"]').click()`)
+    check(
+      (await waitFor(() =>
+        page.evaluate(
+          `document.querySelector('.modal-open')?.innerText.includes('改名 Mac') && document.querySelector('.modal-open')?.innerText.includes('192.168.1.2')`,
+        ),
+      )) !== null,
+      '连接页工具栏直接查看主机名与 IP 月度用量',
+    )
+    await page.call('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    })
+    check(
+      await page.evaluate(
+        `document.documentElement.scrollWidth <= innerWidth && document.querySelector('.modal-open').getBoundingClientRect().right <= innerWidth && document.querySelector('.modal-open table').scrollWidth <= document.querySelector('.modal-open table').parentElement.clientWidth`,
+      ),
+      '设备用量窄屏不造成页面溢出',
+    )
+    await fill('.modal-open input[aria-label="设备用量月份"]', '2020-01')
+    check(
+      (await waitFor(() =>
+        page.evaluate(`document.querySelector('.modal-open')?.innerText.includes('暂无记录')`),
+      )) !== null,
+      '设备用量按月切换，不混入其他月份',
+    )
+    await page.evaluate(`document.querySelector('.modal-open button[aria-label="close"]').click()`)
     // Configuration mismatch must fail closed rather than quietly displaying another source.
     await page.evaluate(
       `localStorage.setItem('stats/service-configs', ${JSON.stringify(JSON.stringify({ perf: { url: base, sourceId: 'wrong-source' } }))})`,

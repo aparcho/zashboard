@@ -30,13 +30,13 @@ const total = computed(() => groupTotalsMap.value.get(props.name) ?? { upload: 0
 const stale = computed(() => !!groupTotalsError.value || !groupTotals.value?.healthy)
 const bytes = (value: number) => prettyBytesHelper(value, { binary: true })
 const tooltip = computed(() => {
-  if (!groupTotals.value) return groupTotalsError.value || '累计流量自动加载'
+  if (!groupTotals.value) return groupTotalsError.value || '本月流量自动加载'
   const since = groupTotals.value.since
     ? new Date(groupTotals.value.since * 1000).toLocaleString('zh-CN', {
         timeZone: 'Asia/Shanghai',
       })
     : '首次采样'
-  return `下载 ${bytes(total.value.download)} · 上传 ${bytes(total.value.upload)}\n自 ${since} 起累计。点击查看详情。嵌套组有重叠，不能相加为全局流量。${stale.value ? ' 当前显示上次成功获取的数据。' : ''}`
+  return `下载 ${bytes(total.value.download)} · 上传 ${bytes(total.value.upload)}\n本月 · 自 ${since} 起统计。点击查看详情。嵌套组有重叠，不能相加为全局流量。${stale.value ? ' 当前显示上次成功获取的数据。' : ''}`
 })
 function handleClick() {
   if (groupTotals.value) trafficDetailsGroup.value = props.name

@@ -10,7 +10,7 @@ FROM python:3.13-slim
 WORKDIR /app
 RUN useradd --uid 10001 --create-home stats && mkdir /data && chown stats:stats /data
 COPY --from=build /src/dist ./dist
-COPY stats-service/service.py ./stats-service/service.py
+COPY stats-service/service.py stats-service/discovery.py ./stats-service/
 USER stats
 VOLUME ["/data"]
 EXPOSE 9099

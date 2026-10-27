@@ -175,7 +175,14 @@ watch(
   { immediate: true },
 )
 
+export const shanghaiMonth = () =>
+  new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+  }).format(new Date())
 export type GroupTotals = {
+  month?: string
   since: number | null
   last_sample: number | null
   healthy: boolean
@@ -183,6 +190,7 @@ export type GroupTotals = {
 }
 export const groupTotals = ref<GroupTotals | null>(null)
 export const groupTotalsError = ref('')
+export const deviceUsageOpen = ref(false)
 export const statsSettingsOpen = ref(false)
 export const deviceEditorIP = ref<string | null>(null)
 export const trafficDetailsGroup = ref<string | null>(null)

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Zashboard 采样统计服务；仅使用 Python 标准库。"""
 import argparse
+from datetime import datetime, timedelta, timezone
+import re
 import hmac
 import ipaddress
 import json
@@ -15,6 +17,16 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen, build_opener, ProxyHandler
 from uuid import uuid4
+
+MONTH_ZONE = timezone(timedelta(hours=8))
+
+def month_key(at=None):
+    return datetime.fromtimestamp(time.time() if at is None else at, MONTH_ZONE).strftime('%Y-%m')
+
+def month_start(month):
+    if not re.fullmatch(r'\d{4}-(?:0[1-9]|1[0-2])', month):
+        raise ValueError('月份格式无效')
+    return datetime.strptime(month, '%Y-%m').replace(tzinfo=MONTH_ZONE).timestamp()
 
 UNKNOWN = '未映射'
 DIMENSIONS = {'device': 'device', 'source_ip': 'source_ip', 'policy': 'policy',
@@ -65,8 +77,25 @@ class Store:
         CREATE TABLE IF NOT EXISTS events(at REAL NOT NULL, kind TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS chain_totals(name TEXT PRIMARY KEY, upload INTEGER NOT NULL,
           download INTEGER NOT NULL);
-        PRAGMA user_version=2;
+        CREATE TABLE IF NOT EXISTS chain_monthly(month TEXT NOT NULL, name TEXT NOT NULL,
+          upload INTEGER NOT NULL, download INTEGER NOT NULL, PRIMARY KEY(month,name));
+        CREATE TABLE IF NOT EXISTS source_monthly(month TEXT NOT NULL, device TEXT NOT NULL,
+          source_ip TEXT NOT NULL, upload INTEGER NOT NULL, download INTEGER NOT NULL,
+          PRIMARY KEY(month,device,source_ip));
+        CREATE TABLE IF NOT EXISTS device_origins(device TEXT PRIMARY KEY, origin TEXT NOT NULL);
+        PRAGMA user_version=3;
         ''')
+
+        with self.db:
+            if not self.meta('monthly_migrated'):
+                # Lifetime chain totals are exact only when the entire interval is in one month.
+                since = self.meta('chain_since')
+                checkpoint = self.meta('checkpoint')
+                if since is not None and checkpoint and month_key(since) == month_key(checkpoint['at']):
+                    self.db.execute('INSERT INTO chain_monthly SELECT ?,name,upload,download FROM chain_totals', (month_key(since),))
+                self.db.execute("""INSERT INTO source_monthly SELECT strftime('%Y-%m',minute,'unixepoch','+8 hours'),
+                    device,source_ip,SUM(upload),SUM(download) FROM buckets GROUP BY 1,2,3""")
+                self.set_meta('monthly_migrated', True)
 
     def meta(self, key, default=None):
         row = self.db.execute('SELECT value FROM meta WHERE key=?', (key,)).fetchone()
@@ -128,6 +157,9 @@ class Store:
                         self.db.execute('''INSERT INTO chain_totals VALUES (?,?,?) ON CONFLICT(name)
                           DO UPDATE SET upload=upload+excluded.upload, download=download+excluded.download''',
                                         (member, up, down))
+                        self.db.execute('''INSERT INTO chain_monthly VALUES (?,?,?,?) ON CONFLICT(month,name)
+                          DO UPDATE SET upload=upload+excluded.upload, download=download+excluded.download''',
+                                        (month_key(now), member, up, down))
                     node = str(chain[0]) if chain else '未知节点'
                     policy = (policies or {}).get((c.get('rule'), c.get('rulePayload')))
                     policy = policy or (str(chain[-1]) if chain else str(c.get('rule') or '未知策略'))
@@ -137,6 +169,9 @@ class Store:
                     exit_ = mapping['exit_vps'] if mapping else ('不适用' if direct else UNKNOWN)
                     values = (minute, bindings.get(source, ''), source, policy, node, entry, exit_,
                               str(m.get('destinationIP') or '未知')[:128], str(m.get('host') or '')[:512], up, down)
+                    self.db.execute('''INSERT INTO source_monthly VALUES (?,?,?,?,?) ON CONFLICT(month,device,source_ip)
+                      DO UPDATE SET upload=upload+excluded.upload,download=download+excluded.download''',
+                                    (month_key(now), bindings.get(source, ''), source, up, down))
                     self.db.execute('''INSERT INTO buckets VALUES (?,?,?,?,?,?,?,?,?,?,?)
                       ON CONFLICT DO UPDATE SET upload=upload+excluded.upload, download=download+excluded.download''', values)
             self.db.execute('DELETE FROM snapshots')
@@ -189,12 +224,60 @@ class Store:
                 if other and other[0] != device_id:
                     raise ValueError(f'{address} 已绑定其他设备，请先解除原绑定')
             self.db.execute('INSERT OR REPLACE INTO devices VALUES (?,?)', (device_id, name))
+            self.db.execute('INSERT OR REPLACE INTO device_origins VALUES (?,?)', (device_id, 'manual'))
             current = {r[0] for r in self.db.execute('SELECT ip FROM bindings WHERE device=? AND until IS NULL', (device_id,))}
             for address in current - set(addresses):
                 self.db.execute('UPDATE bindings SET until=? WHERE ip=? AND until IS NULL', (now, address))
             for address in set(addresses) - current:
                 self.db.execute('INSERT INTO bindings VALUES (?,?,?,NULL)', (address, device_id, now))
         return device_id
+
+    def discover_hosts(self, records, links, now=None):
+        now = time.time() if now is None else now
+        found = {r['ip']: r for r in records}
+        with self.lock, self.db:
+            for address in set(links) | set(found):
+                current = self.db.execute('SELECT device FROM bindings WHERE ip=? AND until IS NULL', (address,)).fetchone()
+                current_id = current[0] if current else None
+                origin = self.db.execute('SELECT origin FROM device_origins WHERE device=?', (current_id,)).fetchone()
+                if current_id and (not origin or origin[0] == 'manual'):
+                    continue
+                record = found.get(address)
+                mac = links.get(address, '')
+                desired = 'auto:' + (mac or address)
+                if current_id and mac and current_id != desired:
+                    self.db.execute('UPDATE bindings SET until=? WHERE ip=? AND until IS NULL', (now,address))
+                    current_id = None
+                if not record:
+                    continue
+                name = text(record['name'],100)
+                if not name:
+                    continue
+                device = current_id or desired
+                self.db.execute('INSERT OR REPLACE INTO devices VALUES (?,?)',(device,name))
+                self.db.execute('INSERT OR REPLACE INTO device_origins VALUES (?,?)',(device,record['source']))
+                if not current_id:
+                    self.db.execute('INSERT INTO bindings VALUES (?,?,?,NULL)',(address,device,now))
+
+    def group_totals(self, month=None):
+        month = month or month_key()
+        start = month_start(month)
+        checkpoint = self.meta('checkpoint')
+        return dict(month=month, since=max(start,self.meta('chain_since',start)),
+            last_sample=checkpoint['at'] if checkpoint else None,
+            healthy=bool(checkpoint and time.time()-checkpoint['at'] < 5 and not self.meta('interrupted',False)),
+            rows=[dict(r) for r in self.db.execute('SELECT name,upload,download FROM chain_monthly WHERE month=? ORDER BY name',(month,))])
+
+    def device_usage(self, month=None):
+        month = month or month_key()
+        month_start(month)
+        rows = [dict(r) for r in self.db.execute("""SELECT s.source_ip,COALESCE(d.name,'') AS name,
+            SUM(s.upload) AS upload,SUM(s.download) AS download FROM source_monthly s
+            LEFT JOIN bindings b ON b.ip=s.source_ip AND b.until IS NULL
+            LEFT JOIN devices d ON d.id=b.device WHERE s.month=? GROUP BY s.source_ip
+            ORDER BY SUM(s.upload+s.download) DESC,s.source_ip""",(month,))]
+        return dict(month=month, rows=rows,
+            months=[r[0] for r in self.db.execute('SELECT DISTINCT month FROM source_monthly ORDER BY month DESC')])
 
     def save_node(self, data):
         node = text(data.get('node', ''))
@@ -352,12 +435,13 @@ def make_handler(store, config):
                             healthy=bool(last and time.time()-last < max(5, config['interval']*3) and not store.meta('interrupted', False)),
                             retention_days=store.retention, sampling=True))
                     elif path == '/api/stats/group-totals':
+                        params = parse_qs(urlsplit(self.path).query)
+                        result = store.group_totals(params.get('month',[None])[0])
                         checkpoint = store.meta('checkpoint')
-                        self.reply(200, dict(since=store.meta('chain_since'),
-                            last_sample=checkpoint['at'] if checkpoint else None,
-                            healthy=bool(checkpoint and time.time()-checkpoint['at'] < max(5, config['interval']*3)
-                                and not store.meta('interrupted', False)),
-                            rows=[dict(r) for r in store.db.execute('SELECT * FROM chain_totals ORDER BY name')]))
+                        result['healthy'] = bool(checkpoint and time.time()-checkpoint['at'] < max(5,config['interval']*3) and not store.meta('interrupted',False))
+                        self.reply(200, result)
+                    elif path == '/api/stats/device-usage':
+                        self.reply(200, store.device_usage(parse_qs(urlsplit(self.path).query).get('month',[None])[0]))
                     elif path == '/api/stats/summary':
                         self.reply(200, store.query(parse_qs(urlsplit(self.path).query)))
                     elif path == '/api/stats/devices':
@@ -434,6 +518,11 @@ def main():
     server.daemon_threads = True
     collector = Collector(store, config, stop)
     collector.start()
+    discovery = None
+    if config.get('discover_hosts', Path('/etc/config/dhcp').exists()):
+        from discovery import HostDiscovery
+        discovery = HostDiscovery(store, config, stop)
+        discovery.start()
     # Signal handlers only set an event; shutdown must run outside serve_forever's thread.
     server.timeout = .5
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
@@ -445,6 +534,8 @@ def main():
     finally:
         stop.set()
         collector.join(timeout=12)
+        if discovery:
+            discovery.join(timeout=5)
         server.server_close()
         with store.lock:
             store.db.close()

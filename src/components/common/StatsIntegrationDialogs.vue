@@ -1,4 +1,5 @@
 <template>
+  <DeviceUsageDialog />
   <DialogWrapper
     v-model="statsSettingsOpen"
     title="累计统计连接"
@@ -93,9 +94,25 @@
   </DialogWrapper>
   <DialogWrapper
     v-model="groupOpen"
-    :title="`${trafficDetailsGroup ?? ''} · 累计流量`"
+    :title="`${trafficDetailsGroup ?? ''} · 流量`"
   >
     <div class="stats-integration-content flex flex-col gap-4 text-sm">
+      <label class="flex items-center gap-3 opacity-70"
+        >月份
+        <input
+          v-model="detailMonth"
+          type="month"
+          class="input input-sm"
+          aria-label="流量月份"
+        />
+      </label>
+      <p
+        v-if="detailError"
+        class="text-error"
+        role="alert"
+      >
+        {{ detailError }}
+      </p>
       <div class="grid grid-cols-3 gap-3">
         <div
           v-for="item in detailCards"
@@ -103,12 +120,15 @@
           class="bg-base-200 rounded-lg p-3"
         >
           <div class="opacity-60">{{ item.label }}</div>
-          <div class="mt-2 font-semibold tabular-nums">{{ bytes(item.value) }}</div>
+          <div class="mt-2 font-semibold tabular-nums">
+            {{ detailTotals ? bytes(item.value) : '—' }}
+          </div>
         </div>
       </div>
-      <p class="opacity-60">开始累计：{{ since }}</p>
+      <p class="opacity-60">统计起点：{{ since }}</p>
       <p class="text-xs opacity-60">
-        按连接实际经过的代理组累计，切换节点不会清零。同一条连接可能经过多个嵌套组，因此各组不能直接相加为全局用量。此处为连接采样统计。
+        每月 1
+        日按北京时间重新计数，历史按月保留。切换节点不会清零。按连接实际经过的代理组统计。同一条连接可能经过多个嵌套组，因此各组不能直接相加为全局用量。此处为连接采样统计。
       </p>
       <p
         v-if="groupTotalsError || !groupTotals?.healthy"
@@ -118,7 +138,7 @@
       </p>
       <button
         class="btn btn-sm self-end"
-        @click="refreshGroupTotals"
+        @click="loadDetail"
       >
         刷新
       </button>
@@ -126,17 +146,19 @@
   </DialogWrapper>
 </template>
 <script setup lang="ts">
+import DeviceUsageDialog from './DeviceUsageDialog.vue'
 import DialogWrapper from '@/components/common/DialogWrapper.vue'
 import { prettyBytesHelper } from '@/helper/utils'
 import { activeBackend } from '@/store/setup'
 import {
   connectIntegratedStats,
+  shanghaiMonth,
+  type GroupTotals,
   deviceEditorIP,
   getStatsDeviceLabel,
   getStatsDeviceByIP,
   groupTotals,
   groupTotalsError,
-  groupTotalsMap,
   refreshGroupTotals,
   refreshStatsLabels,
   remembersStatsToken,
@@ -220,17 +242,51 @@ const groupOpen = computed({
     if (!open) trafficDetailsGroup.value = null
   },
 })
+const detailMonth = ref(shanghaiMonth())
+const detailTotals = ref<GroupTotals | null>(null)
+const detailError = ref('')
+let detailGeneration = 0
+async function loadDetail() {
+  const generation = ++detailGeneration
+  detailTotals.value = null
+  detailError.value = ''
+  try {
+    await verifyStatsSource()
+    const value = await statsRequest<GroupTotals>(
+      `group-totals?month=${encodeURIComponent(detailMonth.value)}`,
+    )
+    if (generation === detailGeneration) detailTotals.value = value
+    if (detailMonth.value === shanghaiMonth()) void refreshGroupTotals()
+  } catch (e) {
+    if (generation === detailGeneration)
+      detailError.value = e instanceof Error ? e.message : '加载失败'
+  }
+}
+watch(trafficDetailsGroup, (group) => {
+  detailGeneration++
+  if (group !== null) {
+    detailMonth.value = shanghaiMonth()
+    void loadDetail()
+  }
+})
+watch(detailMonth, () => {
+  if (groupOpen.value) void loadDetail()
+})
 const total = computed(
-  () => groupTotalsMap.value.get(trafficDetailsGroup.value ?? '') ?? { upload: 0, download: 0 },
+  () =>
+    detailTotals.value?.rows.find((r) => r.name === trafficDetailsGroup.value) ?? {
+      upload: 0,
+      download: 0,
+    },
 )
 const detailCards = computed(() => [
-  { label: '累计合计', value: total.value.upload + total.value.download },
+  { label: '合计', value: total.value.upload + total.value.download },
   { label: '下载', value: total.value.download },
   { label: '上传', value: total.value.upload },
 ])
 const since = computed(() =>
-  groupTotals.value?.since
-    ? new Date(groupTotals.value.since * 1000).toLocaleString('zh-CN', {
+  detailTotals.value?.since
+    ? new Date(detailTotals.value.since * 1000).toLocaleString('zh-CN', {
         timeZone: 'Asia/Shanghai',
       })
     : '尚未开始',

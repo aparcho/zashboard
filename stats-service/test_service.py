@@ -155,7 +155,7 @@ class AccountingTests(unittest.TestCase):
             s.db.execute('PRAGMA user_version=1')
             s.db.commit(); s.db.close()
             s = Store(path)
-            self.assertEqual(s.db.execute('PRAGMA user_version').fetchone()[0], 2)
+            self.assertEqual(s.db.execute('PRAGMA user_version').fetchone()[0], 3)
             self.assertEqual(s.db.execute('SELECT COUNT(*) FROM chain_totals').fetchone()[0], 0)
             s.sample(payload(20, 40, connection(20, 40)), now=102)
             self.assertEqual(s.db.execute('SELECT download FROM chain_totals WHERE name=?', ('YouTube',)).fetchone()[0], 20)
@@ -165,6 +165,57 @@ class AccountingTests(unittest.TestCase):
             self.assertEqual(s.db.execute('SELECT download FROM chain_totals WHERE name=?', ('YouTube',)).fetchone()[0], 20)
             self.assertEqual(s.meta('chain_since'), 102)
             s.db.close()
+
+    def test_month_boundary_uses_shanghai_and_keeps_history(self):
+        from service import month_start
+        s = self.store
+        edge = month_start('2026-11')
+        s.sample(payload(0,0),now=edge-2)
+        s.sample(payload(10,20,connection(10,20)),now=edge-1)
+        self.assertEqual(s.group_totals('2026-11')['rows'],[])
+        s.sample(payload(30,60,connection(30,60)),now=edge)
+        self.assertEqual(s.group_totals('2026-10')['rows'][0]['download'],20)
+        self.assertEqual(s.group_totals('2026-11')['rows'][0]['download'],40)
+        self.assertEqual(s.device_usage('2026-10')['rows'][0]['download'],20)
+        self.assertEqual(s.device_usage('2026-11')['rows'][0]['download'],40)
+        s.sample(payload(30,60),now=edge+100*86400)
+        self.assertEqual(s.device_usage('2026-10')['rows'][0]['download'],20)
+        self.assertEqual(s.group_totals('2026-10')['rows'][0]['download'],20)
+        for month in ['2026-13','2026-00','2026-1',"2026-10' OR 1=1"]:
+            with self.assertRaises(ValueError):s.device_usage(month)
+
+    def test_discovery_preserves_manual_and_detects_ip_reassignment(self):
+        s=self.store
+        def record(address,name,mac):return {'ip':address,'name':name,'mac':mac,'source':'mDNS'}
+        address='192.168.50.22'
+        s.discover_hosts([record(address,'Laptop','aa')],{address:'aa'},now=100)
+        auto=next(d for d in s.devices() if address in d['ips'])
+        s.discover_hosts([record('192.168.50.23','Laptop','bb')],{'192.168.50.23':'bb'},now=101)
+        self.assertEqual(len([d for d in s.devices() if d['name']=='Laptop']),2)
+        s.discover_hosts([], {address:'cc'},now=102)
+        self.assertFalse(any(address in d['ips'] for d in s.devices()))
+        s.discover_hosts([record(address,'New','cc')],{address:'cc'},now=103)
+        self.assertNotEqual(next(d['id'] for d in s.devices() if address in d['ips']),auto['id'])
+        new=next(d for d in s.devices() if address in d['ips'])
+        s.save_device({'id':new['id'],'name':'手动名称','ips':[address]},now=104)
+        s.discover_hosts([record(address,'Changed','dd')],{address:'dd'},now=105)
+        self.assertEqual(next(d['name'] for d in s.devices() if address in d['ips']),'手动名称')
+
+    def test_month_migration_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path=str(Path(temp)/'stats.sqlite3')
+            s=Store(path)
+            s.sample(payload(0,0),now=100)
+            s.sample(payload(10,20,connection(10,20)),now=101)
+            for table in ['chain_monthly','source_monthly']:s.db.execute('DROP TABLE '+table)
+            s.db.execute("DELETE FROM meta WHERE key='monthly_migrated'")
+            s.db.commit();s.db.close()
+            for _ in range(2):
+                s=Store(path)
+                self.assertEqual(s.group_totals('1970-01')['rows'][0]['download'],20)
+                self.assertEqual(s.device_usage('1970-01')['rows'][0]['download'],20)
+                s.db.close()
+
 
 
 class HTTPTests(unittest.TestCase):
@@ -210,7 +261,7 @@ class HTTPTests(unittest.TestCase):
     def test_group_totals_http_requires_auth_and_returns_chain_counters(self):
         self.store.sample(payload(0, 0), now=100)
         self.store.sample(payload(10, 20, connection(10, 20)), now=101)
-        with self.request('group-totals') as response:
+        with self.request('group-totals?month=1970-01') as response:
             totals = json.load(response)
         self.assertEqual(totals['since'], 100)
         self.assertEqual({r['name']: r['download'] for r in totals['rows']}['YouTube'], 20)
