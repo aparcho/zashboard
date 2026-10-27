@@ -18,6 +18,7 @@ jobs:
         with:
           node-version: '24'
       - uses: pnpm/action-setup@v6
+      - run: sh -n stats-service/openwrt.init && sh -n stats-service/rollback-openwrt.sh
       - run: python3 -m unittest discover -s stats-service -v
       - run: pnpm install --frozen-lockfile
       - run: pnpm type-check
@@ -31,4 +32,6 @@ jobs:
             stats-service/service.py
             stats-service/config.example.json
             stats-service/zashboard-stats.service
+            stats-service/openwrt.init
+            stats-service/rollback-openwrt.sh
             docs/统计服务.md
