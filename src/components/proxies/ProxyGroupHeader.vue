@@ -6,16 +6,25 @@
       :icon-margin="proxyGroupIconMargin"
       class="text-base-content"
     />
-    <span
-      class="text-base-content/40 max-w-36 min-w-0 truncate text-[11px] tracking-wider uppercase tabular-nums"
-      @mouseenter="checkTruncation"
+    <div
+      class="text-base-content/40 flex min-w-0 flex-1 items-center gap-1.5 text-[11px] tabular-nums"
+      data-group-metadata
     >
-      {{ proxyGroup.type }} · {{ proxiesCount }}
-    </span>
-    <ProxyGroupTraffic
-      :name="name"
-      class="flex-1"
-    />
+      <span
+        class="min-w-0 truncate tracking-wider uppercase"
+        @mouseenter="checkTruncation"
+        >{{ proxyGroup.type }} · {{ proxiesCount }}</span
+      >
+      <span
+        class="text-base-content/25 shrink-0"
+        aria-hidden="true"
+        >·</span
+      >
+      <ProxyGroupTraffic
+        :name="name"
+        class="shrink-0"
+      />
+    </div>
     <ProxyGroupFilter :group-name="name" />
     <VisibilityToggle
       v-if="manageHiddenGroup"

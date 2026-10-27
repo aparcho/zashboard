@@ -1,24 +1,17 @@
 <template>
   <button
-    class="text-base-content/45 hover:text-base-content min-w-0 truncate text-center text-[11px] whitespace-nowrap tabular-nums"
+    class="hover:text-base-content/70 min-w-0 truncate text-left text-[11px] tracking-normal whitespace-nowrap normal-case tabular-nums"
     :data-traffic-group="name"
     :title="tooltip"
+    :class="stale && groupTotals ? 'opacity-50' : ''"
     @click.stop="handleClick"
     @contextmenu.stop
   >
-    <template v-if="groupTotals?.since">
-      <span class="mr-1 opacity-70">累计</span
-      ><span class="text-base-content/65">{{ bytes(total.upload + total.download) }}</span>
-      <span
-        v-if="stale"
-        class="text-warning ml-1"
-        >未更新</span
-      >
-    </template>
+    <template v-if="groupTotals?.since">{{ bytes(total.upload + total.download) }}</template>
     <span
       v-else
-      class="opacity-60"
-      >{{ groupTotalsError ? '统计暂不可用' : '统计加载中' }}</span
+      aria-label="流量数据加载中"
+      >—</span
     >
   </button>
 </template>

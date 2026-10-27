@@ -1,22 +1,31 @@
 <template>
   <div class="relative flex h-18 shrink-0 flex-col justify-between">
     <div
-      class="flex min-w-0 items-center gap-2"
+      class="text-md truncate"
       :class="proxyGroup.icon && 'pr-10'"
     >
-      <span class="text-md min-w-0 flex-1 truncate">{{ proxyGroup.name }}</span>
-      <ProxyGroupTraffic
-        :name="name"
-        class="max-w-[48%] shrink-0"
-      />
+      {{ proxyGroup.name }}
     </div>
     <div
-      class="text-base-content/40 flex min-w-0 items-center gap-2 truncate text-[11px]"
+      class="text-base-content/40 flex min-w-0 items-center gap-1.5 text-[11px] tabular-nums"
       :class="proxyGroup.icon && 'pr-12'"
+      data-group-metadata
     >
-      <span class="shrink-0 tracking-wider whitespace-nowrap uppercase tabular-nums">
-        {{ proxyGroup.type }} · {{ proxiesCount }}
-      </span>
+      <span
+        v-if="displayContent"
+        class="min-w-0 truncate tracking-wider uppercase"
+        >{{ proxyGroup.type }} ·</span
+      >
+      <span class="shrink-0">{{ proxiesCount }}</span>
+      <span
+        class="text-base-content/25 shrink-0"
+        aria-hidden="true"
+        >·</span
+      >
+      <ProxyGroupTraffic
+        :name="name"
+        class="shrink-0"
+      />
       <ProxyGroupFilter
         v-if="displayContent"
         :group-name="name"
