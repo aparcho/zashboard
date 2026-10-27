@@ -21,6 +21,7 @@
       </header>
 
       <details
+        v-if="!statsAutoMode"
         class="base-container p-4"
         :open="!status"
       >
@@ -493,6 +494,8 @@ import {
   statsConfig,
   statsRequest,
   statsToken,
+  statsAutoMode,
+  ensureAutoStats,
   verifyStatsSource,
   type Device,
   type NodeMapping,
@@ -705,7 +708,9 @@ watch(
 )
 let timer: ReturnType<typeof setInterval>
 onMounted(() => {
-  if (statsConfig.value && statsToken.value) void reload()
+  void ensureAutoStats()
+    .then(() => reload())
+    .catch(() => reload())
   timer = setInterval(() => {
     if (document.visibilityState === 'visible' && status.value && tab.value === 'stats')
       void reload()

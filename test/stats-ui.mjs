@@ -13,6 +13,7 @@ import { findFreePort } from './lib/ports.mjs'
 const temp = await mkdtemp(join(tmpdir(), 'zashboard-stats-ui-'))
 const token = randomBytes(32).toString('hex')
 const port = await findFreePort()
+const base = `http://127.0.0.1:${port}`
 let harness, child, mock
 let checks = 0
 const check = (condition, label) => {
@@ -21,7 +22,7 @@ const check = (condition, label) => {
   checks++
 }
 try {
-  harness = await startHarness({ groups: 3, nodes: 3, connections: 3 })
+  harness = await startHarness({ groups: 3, nodes: 3, connections: 3, appUrl: base })
   const fixture = harness.mock.activeConnections
   let tick = 0
   mock = createServer((req, res) => {
@@ -62,7 +63,6 @@ try {
   )
   let serviceLog = ''
   child.stderr.on('data', (data) => (serviceLog += data.toString()))
-  const base = `http://127.0.0.1:${port}`
   const request = async (path, body) => {
     const response = await fetch(`${base}/api/stats/${path}`, {
       method: body ? 'PUT' : 'GET',
@@ -88,27 +88,25 @@ try {
   check(ready !== null, `真实采集服务启动 ${serviceLog}`)
   const page = await harness.openProxiesPage({ settings: { 'config/language': 'zh-CN' } })
   try {
-    // Enable directly from an original proxy card, without opening the separate stats page.
-    await page.evaluate(`document.querySelector('[data-traffic-group]').click()`)
     check(
       (await waitFor(() =>
-        page.evaluate(`!!document.querySelector('.modal-open input[type="password"]')`),
+        page.evaluate(
+          `document.querySelector('[data-traffic-group]')?.getAttribute('title')?.includes('下载')`,
+        ),
       )) !== null,
-      '代理卡片就地打开统计连接',
+      '全新浏览器无需令牌和设置，自动加载卡片累计',
     )
-    await page.evaluate(`(() => {
-      const form=document.querySelector('.modal-open form');
-      for (const [selector,value] of [['input[type="password"]',${JSON.stringify(token)}],['input[placeholder="留空使用当前站点"]',${JSON.stringify(base)}]]) {
-        const input=form.querySelector(selector); input.value=value; input.dispatchEvent(new Event('input',{bubbles:true}));
-      }
-      form.querySelector('input[type="checkbox"]').click();
-    })()`)
-    await page.evaluate(`document.querySelector('.modal-open form').requestSubmit()`)
     check(
-      (await waitFor(() =>
-        page.evaluate(`document.querySelector('[data-traffic-group]')?.innerText.includes('↓')`),
-      )) !== null,
-      '组卡片直接显示累计上传、下载和合计',
+      await page.evaluate(
+        `!document.body.innerText.includes('启用累计统计') && !document.querySelector('.modal-open input[type="password"]')`,
+      ),
+      '不显示启用按钮或令牌弹层',
+    )
+    check(
+      await page.evaluate(
+        `(() => { const b=document.querySelector('[data-traffic-group]'); const name=document.querySelector('[data-group-name] .collapse-motion-header'); return !!b && !!name && b.getBoundingClientRect().top < name.getBoundingClientRect().top + 32 })()`,
+      ),
+      '累计位于标题行，不新增卡片行',
     )
     const groupData = await request('group-totals')
     check(
@@ -134,9 +132,11 @@ try {
     await page.reload()
     check(
       (await waitFor(() =>
-        page.evaluate(`document.querySelector('[data-traffic-group]')?.innerText.includes('↓')`),
+        page.evaluate(
+          `document.querySelector('[data-traffic-group]')?.getAttribute('title')?.includes('下载')`,
+        ),
       )) !== null,
-      '记住连接后刷新自动显示卡片累计',
+      '刷新后仍免设置自动加载累计',
     )
     await page.screenshot(join(temp, 'proxy-cards.png'))
     await page.call('Emulation.setDeviceMetricsOverride', {
@@ -147,15 +147,17 @@ try {
     })
     check(
       (await waitFor(() =>
-        page.evaluate(`document.querySelector('[data-traffic-group]')?.innerText.includes('↓')`),
+        page.evaluate(
+          `document.querySelector('[data-traffic-group]')?.getAttribute('title')?.includes('下载')`,
+        ),
       )) !== null,
-      '移动端代理卡片包含累计行',
+      '移动端标题行自动显示累计',
     )
     check(
       await page.evaluate(
         `(() => { const b=document.querySelector('[data-traffic-group]'); const card=b?.closest('[data-group-name]'); return !!b && !!card && b.getBoundingClientRect().bottom <= card.getBoundingClientRect().bottom && document.documentElement.scrollWidth <= innerWidth })()`,
       ),
-      '移动端双列卡片累计行没有被裁切或横向溢出',
+      '移动端双列标题累计没有被裁切或横向溢出',
     )
     await page.screenshot(join(temp, 'proxy-cards-mobile.png'))
     await page.call('Emulation.setDeviceMetricsOverride', {

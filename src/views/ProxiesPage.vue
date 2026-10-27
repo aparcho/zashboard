@@ -271,7 +271,7 @@ const renderComponent = computed(() => {
 })
 
 const cardVariant = computed(() => `${cardType.value}:${displayTwoColumns.value ? 2 : 1}`)
-const estimatedCardHeight = computed(() => (cardType.value === 'mobile' ? 128 : 136))
+const estimatedCardHeight = computed(() => (cardType.value === 'mobile' ? 88 : 112))
 
 const foldersUiVisible = computed(
   () => isProxyFolderModeActive.value && proxiesTabShow.value === PROXY_TAB_TYPE.PROXIES,

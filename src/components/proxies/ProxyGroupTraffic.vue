@@ -1,27 +1,25 @@
 <template>
   <button
-    class="text-base-content/55 hover:text-base-content mt-2 flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 text-left text-[11px] tabular-nums"
+    class="text-base-content/45 hover:text-base-content min-w-0 truncate text-center text-[11px] whitespace-nowrap tabular-nums"
     :data-traffic-group="name"
     :title="tooltip"
     @click.stop="handleClick"
     @contextmenu.stop
   >
     <template v-if="groupTotals?.since">
-      <span
-        >累计
-        <span class="text-base-content/80 font-medium">{{
-          bytes(total.upload + total.download)
-        }}</span></span
-      >
-      <span>↓ {{ bytes(total.download) }}</span>
-      <span>↑ {{ bytes(total.upload) }}</span>
+      <span class="mr-1 opacity-70">累计</span
+      ><span class="text-base-content/65">{{ bytes(total.upload + total.download) }}</span>
       <span
         v-if="stale"
-        class="text-warning"
+        class="text-warning ml-1"
         >未更新</span
       >
     </template>
-    <span v-else>{{ groupTotalsError ? '累计统计暂不可用 · 点击设置' : '启用累计统计' }}</span>
+    <span
+      v-else
+      class="opacity-60"
+      >{{ groupTotalsError ? '统计暂不可用' : '统计加载中' }}</span
+    >
   </button>
 </template>
 <script setup lang="ts">
@@ -30,7 +28,7 @@ import {
   groupTotals,
   groupTotalsError,
   groupTotalsMap,
-  statsSettingsOpen,
+  refreshGroupTotals,
   trafficDetailsGroup,
 } from '@/store/traffic-stats'
 import { computed } from 'vue'
@@ -39,17 +37,16 @@ const total = computed(() => groupTotalsMap.value.get(props.name) ?? { upload: 0
 const stale = computed(() => !!groupTotalsError.value || !groupTotals.value?.healthy)
 const bytes = (value: number) => prettyBytesHelper(value, { binary: true })
 const tooltip = computed(() => {
-  if (!groupTotals.value)
-    return groupTotalsError.value || '连接统计服务后，自动在各分流卡片显示累计流量'
+  if (!groupTotals.value) return groupTotalsError.value || '累计流量自动加载'
   const since = groupTotals.value.since
     ? new Date(groupTotals.value.since * 1000).toLocaleString('zh-CN', {
         timeZone: 'Asia/Shanghai',
       })
     : '首次采样'
-  return `自 ${since} 起，按实际经过该组的连接累计。点击查看详情；嵌套组有重叠，不能相加为全局流量。${stale.value ? ' 当前显示上次成功获取的数据。' : ''}`
+  return `下载 ${bytes(total.value.download)} · 上传 ${bytes(total.value.upload)}\n自 ${since} 起累计。点击查看详情。嵌套组有重叠，不能相加为全局流量。${stale.value ? ' 当前显示上次成功获取的数据。' : ''}`
 })
 function handleClick() {
   if (groupTotals.value) trafficDetailsGroup.value = props.name
-  else statsSettingsOpen.value = true
+  else void refreshGroupTotals()
 }
 </script>

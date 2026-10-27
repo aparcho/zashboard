@@ -171,7 +171,7 @@ class HTTPTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.store = Store(':memory:')
-        self.config = dict(api_token='a' * 32, source_id='test', interval=1, static_dir=self.temp.name, allowed_origins=['http://localhost:5173'])
+        self.config = dict(require_auth=True, api_token='a' * 32, source_id='test', interval=1, static_dir=self.temp.name, allowed_origins=['http://localhost:5173'])
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(self.store, self.config))
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -218,6 +218,15 @@ class HTTPTests(unittest.TestCase):
             self.request('group-totals', token=False)
         self.assertEqual(error.exception.code, 401)
         error.exception.close()
+
+    def test_lan_mode_automatically_allows_read_and_device_write(self):
+        self.config['require_auth'] = False
+        with self.request('status', token=False) as response:
+            self.assertFalse(json.load(response)['auth_required'])
+        with self.request('devices', {'name': '内网设备', 'ips': ['192.168.1.8']}, token=False) as response:
+            self.assertTrue(json.load(response)['id'])
+        with self.request('devices', token=False) as response:
+            self.assertEqual(json.load(response)[0]['name'], '内网设备')
 
     def test_static_api_isolation(self):
         with self.assertRaises(HTTPError):

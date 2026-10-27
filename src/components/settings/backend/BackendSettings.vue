@@ -40,8 +40,14 @@
       v-if="isVisibleTrafficStats"
       :setting-key="k.trafficStatistics"
     >
-      <div class="setting-item-label">累计统计连接</div>
+      <div class="setting-item-label">累计统计</div>
+      <span
+        v-if="statsAutoMode"
+        class="text-base-content/50 text-xs"
+        >自动启用</span
+      >
       <button
+        v-else
         class="btn btn-sm"
         @click="statsSettingsOpen = true"
       >
@@ -214,7 +220,7 @@ import { TUN_STACK } from '@/constant'
 import { notifyRequestError } from '@/helper/request-error'
 import { autoUpgradeCore, checkUpgradeCore } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
-import { statsSettingsOpen } from '@/store/traffic-stats'
+import { statsSettingsOpen, statsAutoMode } from '@/store/traffic-stats'
 import { computed } from 'vue'
 
 const k = BACKEND_ITEM_KEYS

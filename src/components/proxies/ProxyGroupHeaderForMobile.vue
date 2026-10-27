@@ -1,10 +1,14 @@
 <template>
-  <div class="relative flex min-h-24 shrink-0 flex-col justify-between gap-1">
+  <div class="relative flex h-18 shrink-0 flex-col justify-between">
     <div
-      class="text-md truncate"
+      class="flex min-w-0 items-center gap-2"
       :class="proxyGroup.icon && 'pr-10'"
     >
-      {{ proxyGroup.name }}
+      <span class="text-md min-w-0 flex-1 truncate">{{ proxyGroup.name }}</span>
+      <ProxyGroupTraffic
+        :name="name"
+        class="max-w-[48%] shrink-0"
+      />
     </div>
     <div
       class="text-base-content/40 flex min-w-0 items-center gap-2 truncate text-[11px]"
@@ -46,7 +50,6 @@
         @click.stop="emit('latency-test')"
       />
     </div>
-    <ProxyGroupTraffic :name="name" />
     <ProxyIcon
       v-if="proxyGroup?.icon"
       :icon="proxyGroup.icon"

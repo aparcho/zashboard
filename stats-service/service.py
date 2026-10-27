@@ -317,7 +317,7 @@ def make_handler(store, config):
 
         def authorized(self):
             token = self.headers.get('Authorization', '')
-            if not self.origin_allowed() or not hmac.compare_digest(token.encode(), ('Bearer ' + config['api_token']).encode()):
+            if not self.origin_allowed() or (config.get('require_auth', False) and not hmac.compare_digest(token.encode(), ('Bearer ' + config['api_token']).encode())):
                 self.reply(401, {'error': '统计服务认证失败或来源不受允许'})
                 return False
             return True
@@ -347,6 +347,7 @@ def make_handler(store, config):
                         checkpoint = store.meta('checkpoint')
                         last = checkpoint['at'] if checkpoint else None
                         self.reply(200, dict(source_id=config['source_id'], controller_label=config.get('controller_label', ''),
+                            auth_required=config.get('require_auth', False),
                             last_sample=last, last_error_at=store.meta('last_error_at'), interval=config['interval'],
                             healthy=bool(last and time.time()-last < max(5, config['interval']*3) and not store.meta('interrupted', False)),
                             retention_days=store.retention, sampling=True))
@@ -409,7 +410,7 @@ def main():
     config = json.loads(Path(args.config).read_text())
     config['api_token'] = os.environ.get('STATS_API_TOKEN', config.get('api_token', ''))
     config['controller_secret'] = os.environ.get('MIHOMO_SECRET', config.get('controller_secret', ''))
-    if len(config['api_token']) < 24:
+    if config.get('require_auth', False) and len(config['api_token']) < 24:
         parser.error('api_token 至少需要 24 个字符，可通过 STATS_API_TOKEN 设置')
     controller = urlsplit(config.get('controller', ''))
     if controller.scheme not in ('http', 'https') or not controller.hostname or controller.username or controller.query or controller.fragment:

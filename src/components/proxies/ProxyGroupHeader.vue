@@ -7,11 +7,15 @@
       class="text-base-content"
     />
     <span
-      class="text-base-content/40 min-w-0 flex-1 truncate text-[11px] tracking-wider uppercase tabular-nums"
+      class="text-base-content/40 max-w-36 min-w-0 truncate text-[11px] tracking-wider uppercase tabular-nums"
       @mouseenter="checkTruncation"
     >
       {{ proxyGroup.type }} · {{ proxiesCount }}
     </span>
+    <ProxyGroupTraffic
+      :name="name"
+      class="flex-1"
+    />
     <ProxyGroupFilter :group-name="name" />
     <VisibilityToggle
       v-if="manageHiddenGroup"
@@ -35,7 +39,6 @@
       {{ prettyBytesHelper(downloadTotal) }}/s
     </div>
   </div>
-  <ProxyGroupTraffic :name="name" />
 </template>
 
 <script setup lang="ts">

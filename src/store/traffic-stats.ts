@@ -8,6 +8,7 @@ export type Device = { id: string; name: string; ips: string[] }
 export type NodeMapping = { node: string; entry_vps: string; exit_vps: string }
 export type StatsStatus = {
   source_id: string
+  auth_required?: boolean
   controller_label: string
   healthy: boolean
   last_sample: number | null
@@ -39,6 +40,8 @@ export const remembersStatsToken = computed(
   () => !!rememberedTokens.value[activeBackend.value?.uuid ?? ''],
 )
 export const statsToken = ref('')
+export const statsAutoMode = ref(false)
+let autoConnection: { id: string; promise: Promise<void> } | null = null
 export const statsDevices = ref<Device[]>([])
 const canonicalIP = (address: string) => {
   try {
@@ -75,15 +78,48 @@ export function saveStatsConfig(config: StatsConfig, token: string) {
   sessionStorage.setItem(`stats/token/${id}`, statsToken.value)
 }
 
+export async function ensureAutoStats() {
+  const id = activeBackend.value?.uuid
+  if (!id) return
+  if (statsConfig.value?.sourceId && statsAutoMode.value) return
+  if (autoConnection?.id === id) return autoConnection.promise
+  const url = statsConfig.value?.url ?? ''
+  const promise = (async () => {
+    const response = await fetch(`${url}/api/stats/status`, {
+      headers: statsToken.value ? { Authorization: `Bearer ${statsToken.value}` } : {},
+      signal: AbortSignal.timeout(10000),
+      cache: 'no-store',
+      credentials: 'omit',
+    })
+    if (!response.ok) throw new Error('统计服务暂不可用')
+    const status = (await response.json()) as StatsStatus
+    if (activeBackend.value?.uuid !== id) throw new Error('后端已切换')
+    if (status.auth_required !== false) return
+    if (typeof status.source_id !== 'string' || !status.source_id)
+      throw new Error('统计服务身份无效')
+    statsAutoMode.value = true
+    if (!statsConfig.value?.sourceId)
+      configs.value = { ...configs.value, [id]: { url, sourceId: status.source_id } }
+  })()
+  autoConnection = { id, promise }
+  try {
+    await promise
+  } finally {
+    if (autoConnection?.promise === promise) autoConnection = null
+  }
+}
+
 export async function statsRequest<T>(path: string, body?: unknown): Promise<T> {
+  if (!statsConfig.value?.sourceId || (!statsToken.value && !statsAutoMode.value))
+    await ensureAutoStats()
   const config = statsConfig.value
   const token = statsToken.value
   const backendId = activeBackend.value?.uuid
-  if (!config?.sourceId || !token) throw new Error('请先配置统计服务并输入访问令牌')
+  if (!config?.sourceId || (!token && !statsAutoMode.value)) throw new Error('统计服务暂不可用')
   const response = await fetch(`${config.url}/api/stats/${path}`, {
     method: body === undefined ? 'GET' : 'PUT',
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -129,6 +165,8 @@ watch(
   () => activeBackend.value?.uuid,
   (id) => {
     statsDevices.value = []
+    statsAutoMode.value = false
+    autoConnection = null
     statsToken.value = id
       ? (sessionStorage.getItem(`stats/token/${id}`) ?? rememberedTokens.value[id] ?? '')
       : ''
@@ -157,11 +195,6 @@ let groupPending: number | null = null
 export async function refreshGroupTotals() {
   if (groupPending !== null) return
   const generation = ++groupGeneration
-  if (!statsConfig.value || !statsToken.value) {
-    groupTotals.value = null
-    groupTotalsError.value = ''
-    return
-  }
   groupPending = generation
   try {
     await verifyStatsSource()
@@ -177,10 +210,6 @@ export async function refreshGroupTotals() {
   }
 }
 export function openDeviceEditor(address: string) {
-  if (!statsConfig.value || !statsToken.value) {
-    statsSettingsOpen.value = true
-    return
-  }
   deviceEditorIP.value = address
 }
 export async function connectIntegratedStats(url: string, token: string, remember: boolean) {
