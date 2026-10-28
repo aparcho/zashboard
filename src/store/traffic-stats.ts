@@ -17,7 +17,14 @@ export type StatsStatus = {
   retention_days: number
 }
 export type StatsSummary = {
-  rows: { key: string; label: string; upload: number; download: number }[]
+  rows: {
+    key: string
+    label: string
+    upload: number
+    download: number
+    source_ip?: string
+    current_name?: string
+  }[]
   total: { upload: number; download: number }
   series: { at: number; upload: number; download: number }[]
   coverage: {

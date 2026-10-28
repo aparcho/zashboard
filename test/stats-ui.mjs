@@ -181,8 +181,10 @@ try {
       )
     check(connected !== null, '统计页面连接真实采集服务')
     check(
-      await page.evaluate(`document.body?.innerText.includes('未绑定设备')`),
-      '未绑定设备流量正确展示',
+      await page.evaluate(
+        `document.querySelector('tbody')?.innerText.includes('192.168.1.2') && !document.querySelector('tbody')?.innerText.includes('未绑定设备')`,
+      ),
+      '未绑定历史按来源 IP 分开显示',
     )
     const clickText = async (text) => {
       const clicked = await page.evaluate(

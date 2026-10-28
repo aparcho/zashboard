@@ -311,12 +311,30 @@ class Store:
         condition = ' AND '.join(where)
         column = DIMENSIONS[dimension]
         with self.lock:
-            rows = [dict(r) for r in self.db.execute(f'''SELECT {column} AS key,
-              SUM(upload) AS upload,SUM(download) AS download FROM buckets WHERE {condition}
-              GROUP BY {column} ORDER BY SUM(upload+download) DESC LIMIT 500''', args)]
             names = {r['id']: r['name'] for r in self.db.execute('SELECT * FROM devices')}
-            for row in rows:
-                row['label'] = names.get(row['key'], '未绑定设备') if dimension == 'device' else (row['key'] or '未知')
+            if dimension == 'device':
+                # 没有历史设备 ID 的记录按当时的来源 IP 独立汇总，不回写归属。
+                rows = [dict(r) for r in self.db.execute(f"""SELECT device AS key,
+                  CASE WHEN device='' THEN source_ip ELSE '' END AS source_ip,
+                  SUM(upload) AS upload,SUM(download) AS download FROM buckets WHERE {condition}
+                  GROUP BY device,CASE WHEN device='' THEN source_ip ELSE '' END
+                  ORDER BY SUM(upload+download) DESC LIMIT 500""",args)]
+                current_names = {r['ip']:r['name'] for r in self.db.execute(
+                    'SELECT b.ip,d.name FROM bindings b JOIN devices d ON d.id=b.device WHERE b.until IS NULL')}
+                for row in rows:
+                    if row['key']:
+                        row['label'] = names.get(row['key'],row['key'])
+                    else:
+                        source=row['source_ip'] or '本机/未知'
+                        row['key']='unbound:'+source
+                        row['label']=source
+                        row['current_name']=current_names.get(source,'')
+            else:
+                rows = [dict(r) for r in self.db.execute(f"""SELECT {column} AS key,
+                  SUM(upload) AS upload,SUM(download) AS download FROM buckets WHERE {condition}
+                  GROUP BY {column} ORDER BY SUM(upload+download) DESC LIMIT 500""", args)]
+                for row in rows:
+                    row['label'] = row['key'] or '未知'
             total = dict(self.db.execute(f'SELECT COALESCE(SUM(upload),0) upload,COALESCE(SUM(download),0) download FROM buckets WHERE {condition}', args).fetchone())
             series = [dict(r) for r in self.db.execute(f'''SELECT CAST(minute/3600 AS INTEGER)*3600 AS at,
               SUM(upload) upload,SUM(download) download FROM buckets WHERE {condition} GROUP BY at ORDER BY at''', args)]

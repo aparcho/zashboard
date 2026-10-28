@@ -166,6 +166,22 @@ class AccountingTests(unittest.TestCase):
             self.assertEqual(s.meta('chain_since'), 102)
             s.db.close()
 
+    def test_unbound_history_is_split_by_ip_without_reassigning(self):
+        s=self.store
+        s.sample(payload(0,0),now=100)
+        s.sample(payload(30,60,connection(10,20,source='192.168.1.8'),connection(20,40,id='b',source='192.168.1.9')),now=101)
+        before=self.query()
+        self.assertEqual({r['label'] for r in before['rows']},{'192.168.1.8','192.168.1.9'})
+        self.assertEqual(before['total'],{'upload':30,'download':60})
+        s.save_device({'name':'现在的名称','ips':['192.168.1.8']},now=102)
+        after=self.query()
+        row=next(r for r in after['rows'] if r['source_ip']=='192.168.1.8')
+        self.assertEqual(row['label'],'192.168.1.8')
+        self.assertEqual(row['current_name'],'现在的名称')
+        self.assertEqual(after['total'],before['total'])
+        self.assertEqual(s.db.execute("SELECT COUNT(*) FROM buckets WHERE device='' ").fetchone()[0],2)
+        self.assertEqual(self.query(source_ip='192.168.1.9')['total']['download'],40)
+
     def test_month_boundary_uses_shanghai_and_keeps_history(self):
         from service import month_start
         s = self.store

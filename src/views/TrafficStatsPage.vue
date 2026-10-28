@@ -7,9 +7,6 @@
       <header class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 class="text-2xl font-semibold">流量统计</h1>
-          <p class="mt-1 text-sm opacity-60">
-            设备、策略与 VPS 的使用情况 · 关闭页面后继续统计 · Asia/Shanghai
-          </p>
         </div>
         <button
           class="btn btn-sm"
@@ -273,6 +270,11 @@
                         v-if="dimension === 'source_ip' && getStatsDeviceLabel(row.key)"
                         class="mt-1 block text-xs opacity-60"
                         >{{ getStatsDeviceLabel(row.key) }}</span
+                      >
+                      <span
+                        v-if="row.current_name"
+                        class="mt-1 block text-xs opacity-60"
+                        >当前：{{ row.current_name }}</span
                       >
                     </td>
                     <td class="whitespace-nowrap tabular-nums">{{ bytes(row.upload) }}</td>
