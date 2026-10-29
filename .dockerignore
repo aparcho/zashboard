@@ -1,1 +1,9 @@
-./node_modules
+node_modules
+.git
+dist
+stats-service/data
+stats-service/config.json
+*.sqlite3
+*.sqlite3-*
+__pycache__
+.env

@@ -1,0 +1,17 @@
+{
+  "source_id": "nikki-home",
+  "controller_label": "家庭 Nikki",
+  "controller": "http://127.0.0.1:9090",
+  "controller_secret": "",
+  "require_auth": false,
+  "api_token": "",
+  "listen": "127.0.0.1",
+  "port": 9099,
+  "interval": 1,
+  "retention_days": 90,
+  "database": "stats-service/data/stats.sqlite3",
+  "static_dir": "dist",
+  "allowed_origins": ["http://localhost:5173"],
+  "host_refresh_interval": 60,
+  "router_dhcp": null
+}

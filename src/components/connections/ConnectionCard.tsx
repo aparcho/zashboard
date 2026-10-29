@@ -11,7 +11,7 @@ import {
   CONNECTIONS_TABLE_ACCESSOR_KEY,
   PROXY_CHAIN_DIRECTION,
 } from '@/constant'
-import { getConnectionChains, getConnectionSmartBlock } from '@/helper'
+import { getConnectionChains, getConnectionSmartBlock, getConnectionSourceIP } from '@/helper'
 import { notifyRequestError } from '@/helper/request-error'
 import {
   connectionFilter,
@@ -20,6 +20,7 @@ import {
   showClosedOnly,
 } from '@/store/connections'
 import { connectionCardLines, proxyChainDirection, showFullProxyChain } from '@/store/settings'
+import { openDeviceEditor } from '@/store/traffic-stats'
 import type { Connection } from '@/types'
 import {
   ArrowDownIcon,
@@ -82,6 +83,23 @@ export default defineComponent<{
           <span class="w-80 grow truncate break-all">
             {highlightedText(CONNECTIONS_TABLE_ACCESSOR_KEY.GeoIP)}
           </span>
+        ),
+        [CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname]: () => (
+          <button
+            class="hover:text-primary text-left"
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+              openDeviceEditor(getConnectionSourceIP(conn))
+            }}
+          >
+            {getConnectionDisplayValue(
+              conn,
+              CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname,
+              displayOptions,
+            )
+              ? highlightedText(CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname)
+              : '—'}
+          </button>
         ),
         [CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP]: () => (
           <span class="w-40 grow truncate break-all">
