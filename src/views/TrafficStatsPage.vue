@@ -166,18 +166,6 @@
               />
             </label>
             <label class="flex flex-col gap-1 text-sm"
-              >入口 VPS（完整名称）<input
-                v-model="entryFilter"
-                class="input w-full"
-                placeholder="全部入口"
-            /></label>
-            <label class="flex flex-col gap-1 text-sm"
-              >落地 VPS（完整名称）<input
-                v-model="exitFilter"
-                class="input w-full"
-                placeholder="全部落地"
-            /></label>
-            <label class="flex flex-col gap-1 text-sm"
               >来源 IP<input
                 v-model="ipFilter"
                 class="input w-full"
@@ -402,85 +390,6 @@
             添加设备后，连接列表和统计将显示机器名称。
           </p>
         </template>
-
-        <template v-if="tab === 'nodes'">
-          <div class="base-container p-4">
-            <h2 class="font-medium">节点与 VPS 对应关系</h2>
-            <form
-              class="mt-3 grid gap-3 md:grid-cols-3"
-              @submit.prevent="saveNode"
-            >
-              <label class="flex flex-col gap-1 text-sm"
-                >节点完整名称<input
-                  v-model="nodeName"
-                  class="input w-full"
-                  required
-                  placeholder="与连接中的最终节点名称一致"
-              /></label>
-              <label class="flex flex-col gap-1 text-sm"
-                >入口 VPS<input
-                  v-model="entryVps"
-                  class="input w-full"
-                  placeholder="例如：HK2"
-              /></label>
-              <label class="flex flex-col gap-1 text-sm"
-                >落地 VPS<input
-                  v-model="exitVps"
-                  class="input w-full"
-                  placeholder="例如：HKG"
-              /></label>
-              <p class="text-xs opacity-60 md:col-span-3">
-                直连节点入口与落地填写同一
-                VPS。中转节点分别填写；不根据名称自动猜测。修改从保存后生效，历史统计保留原归属。DIRECT
-                等内置出口无需映射。
-              </p>
-              <button
-                class="btn btn-primary btn-sm justify-self-start"
-                :disabled="busy"
-              >
-                保存映射
-              </button>
-            </form>
-          </div>
-          <div class="base-container overflow-x-auto p-4">
-            <table class="table w-full">
-              <thead>
-                <tr>
-                  <th>节点</th>
-                  <th>入口 VPS</th>
-                  <th>落地 VPS</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="n in nodes"
-                  :key="n.node"
-                >
-                  <td class="break-all">{{ n.node }}</td>
-                  <td>{{ n.entry_vps }}</td>
-                  <td>{{ n.exit_vps }}</td>
-                  <td>
-                    <button
-                      class="btn btn-ghost btn-xs"
-                      @click="editNode(n)"
-                    >
-                      编辑
-                    </button>
-                  </td>
-                </tr>
-                <tr v-if="!nodes.length">
-                  <td
-                    colspan="4"
-                    class="py-8 text-center opacity-60"
-                  >
-                    暂无映射。可先在节点排行中查看实际节点名称。
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </template>
       </template>
     </div>
   </div>
@@ -500,7 +409,6 @@ import {
   ensureAutoStats,
   verifyStatsSource,
   type Device,
-  type NodeMapping,
   type StatsStatus,
   type StatsSummary,
 } from '@/store/traffic-stats'
@@ -515,19 +423,15 @@ const error = ref('')
 const status = ref<StatsStatus | null>(null)
 const summary = ref<StatsSummary | null>(null)
 const devices = ref<Device[]>([])
-const nodes = ref<NodeMapping[]>([])
 const tabs = [
   { key: 'stats', label: '统计概览' },
   { key: 'devices', label: '设备绑定' },
-  { key: 'nodes', label: 'VPS 映射' },
 ]
 const tab = ref('stats')
 const dimensions = [
   { key: 'device', label: '设备' },
   { key: 'policy', label: '分流策略' },
   { key: 'node', label: '代理节点' },
-  { key: 'entry_vps', label: '入口 VPS' },
-  { key: 'exit_vps', label: '落地 VPS' },
   { key: 'source_ip', label: '来源 IP' },
   { key: 'host', label: '目标域名' },
   { key: 'target_ip', label: '目标 IP' },
@@ -536,15 +440,10 @@ const dimension = ref('device')
 const period = ref('today')
 const deviceFilter = ref('')
 const policyFilter = ref('')
-const entryFilter = ref('')
-const exitFilter = ref('')
 const ipFilter = ref('')
 const deviceId = ref('')
 const deviceName = ref('')
 const deviceIPs = ref('')
-const nodeName = ref('')
-const entryVps = ref('')
-const exitVps = ref('')
 const totalCards = computed(() => [
   { label: '已归属上传', value: summary.value?.total.upload ?? 0 },
   { label: '已归属下载', value: summary.value?.total.download ?? 0 },
@@ -608,20 +507,16 @@ async function reload() {
       end: String(end),
       device: deviceFilter.value,
       policy: policyFilter.value.trim(),
-      entry_vps: entryFilter.value.trim(),
-      exit_vps: exitFilter.value.trim(),
       source_ip: ipFilter.value.trim(),
     })
-    const [nextSummary, nextDevices, nextNodes] = await Promise.all([
+    const [nextSummary, nextDevices] = await Promise.all([
       statsRequest<StatsSummary>(`summary?${query}`),
       statsRequest<Device[]>('devices'),
-      statsRequest<NodeMapping[]>('nodes'),
     ])
     if (current !== generation) return
     status.value = nextStatus
     summary.value = nextSummary
     devices.value = nextDevices
-    nodes.value = nextNodes
     await refreshStatsLabels()
   } catch (e) {
     if (current !== generation) return
@@ -641,12 +536,7 @@ async function connect() {
   }
 }
 function clearFilters() {
-  deviceFilter.value =
-    policyFilter.value =
-    entryFilter.value =
-    exitFilter.value =
-    ipFilter.value =
-      ''
+  deviceFilter.value = policyFilter.value = ipFilter.value = ''
   void reload()
 }
 function resetDevice() {
@@ -680,18 +570,6 @@ async function saveDevice() {
   })
   if (!error.value) resetDevice()
 }
-function editNode(n: NodeMapping) {
-  nodeName.value = n.node
-  entryVps.value = n.entry_vps
-  exitVps.value = n.exit_vps
-}
-async function saveNode() {
-  await mutate('nodes', {
-    node: nodeName.value,
-    entry_vps: entryVps.value,
-    exit_vps: exitVps.value,
-  })
-}
 watch(
   () => activeBackend.value?.uuid,
   () => {
@@ -699,10 +577,8 @@ watch(
     busy.value = false
     status.value = summary.value = null
     devices.value = []
-    nodes.value = []
     resetDevice()
     clearFilters()
-    nodeName.value = entryVps.value = exitVps.value = ''
     serviceUrl.value = statsConfig.value?.url ?? ''
     sourceId.value = statsConfig.value?.sourceId ?? ''
     token.value = statsToken.value

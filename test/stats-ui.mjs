@@ -212,16 +212,6 @@ try {
     )
     const devices = await request('devices')
     check(devices[0]?.ips.length === 2, '设备绑定已写入 SQLite')
-    await clickText('VPS 映射')
-    await fill('input[placeholder="与连接中的最终节点名称一致"]', fixture[0].chains[0])
-    await fill('input[placeholder="例如：HK2"]', '验收入口')
-    await fill('input[placeholder="例如：HKG"]', '验收落地')
-    await clickText('保存映射')
-    check(
-      (await waitFor(async () => (await request('nodes')).length === 1)) !== null,
-      '通过页面保存入口与落地 VPS',
-    )
-    await sleep(500)
     await clickText('统计概览')
     await clickText('刷新')
     check(
@@ -236,12 +226,14 @@ try {
       )
     await select(2, devices[0].id)
     await sleep(300)
-    await select(1, 'exit_vps')
+    await select(1, 'node')
     check(
       (await waitFor(() =>
-        page.evaluate(`document.querySelector('table')?.innerText.includes('验收落地')`),
+        page.evaluate(
+          `document.querySelector('table')?.innerText.includes(${JSON.stringify(fixture[0].chains[0])})`,
+        ),
       )) !== null,
-      '设备与落地 VPS 交叉查询',
+      '设备与代理节点交叉查询',
     )
     const upload = (await request(`summary?dimension=device&device=${devices[0].id}`)).total.upload
     check(upload > 0, '绑定后产生的流量已按设备归属')
