@@ -31,7 +31,7 @@ def month_start(month):
 UNKNOWN = '未映射'
 DIMENSIONS = {'device': 'device', 'source_ip': 'source_ip', 'policy': 'policy',
               'node': 'node', 'entry_vps': 'entry_vps', 'exit_vps': 'exit_vps',
-              'target_ip': 'target_ip', 'host': 'host'}
+              'target_ip': 'target_ip', 'host': 'host', 'vps': 'node'}
 
 
 def ip(value):
@@ -289,6 +289,19 @@ class Store:
             self.db.execute('INSERT OR REPLACE INTO nodes VALUES (?,?,?)', (
                 node, text(data.get('entry_vps', '')) or UNKNOWN, text(data.get('exit_vps', '')) or UNKNOWN))
 
+    def configure_vps(self, paths):
+        if not isinstance(paths, dict):
+            raise ValueError('vps_paths 必须为节点到 VPS 列表的映射')
+        checked = {}
+        for node, path in paths.items():
+            if not isinstance(path, list) or not path or len(path) > 16:
+                raise ValueError('每个节点必须有 1 至 16 个 VPS')
+            checked[text(node)] = list(dict.fromkeys(text(v) for v in path if text(v)))
+            if not checked[text(node)]:
+                raise ValueError('VPS 名称不能为空')
+        with self.lock, self.db:
+            self.set_meta('vps_paths', checked)
+
     def query(self, params):
         dimension = params.get('dimension', ['device'])[0]
         if dimension not in DIMENSIONS:
@@ -312,7 +325,28 @@ class Store:
         column = DIMENSIONS[dimension]
         with self.lock:
             names = {r['id']: r['name'] for r in self.db.execute('SELECT * FROM devices')}
-            if dimension == 'device':
+            if dimension == 'vps':
+                # 按明确配置的完整路径展开；一条路径内同一 VPS 只计一次。
+                paths = self.meta('vps_paths', {})
+                grouped = {}
+                raw = self.db.execute(f"""SELECT node,entry_vps,exit_vps,
+                  SUM(upload) upload,SUM(download) download FROM buckets WHERE {condition}
+                  GROUP BY node,entry_vps,exit_vps""", args)
+                for item in raw:
+                    node = item['node']
+                    if node.upper() in ('DIRECT','REJECT','REJECT-DROP','PASS','COMPATIBLE','TAILNET'):
+                        continue
+                    path = paths.get(node)
+                    if path is None:
+                        path = [v for v in (item['entry_vps'],item['exit_vps']) if v and v not in (UNKNOWN,'不适用')]
+                    if not path:
+                        path = ['未识别：' + node]
+                    for vps in set(path):
+                        row = grouped.setdefault(vps, dict(key=vps,label=vps,upload=0,download=0))
+                        row['upload'] += item['upload']
+                        row['download'] += item['download']
+                rows = sorted(grouped.values(),key=lambda r:r['upload']+r['download'],reverse=True)[:500]
+            elif dimension == 'device':
                 # 没有历史设备 ID 的记录按当时的来源 IP 独立汇总，不回写归属。
                 rows = [dict(r) for r in self.db.execute(f"""SELECT device AS key,
                   CASE WHEN device='' THEN source_ip ELSE '' END AS source_ip,
@@ -532,6 +566,7 @@ def main():
     db_path = Path(config.get('database', 'stats-service/data/stats.sqlite3')).resolve()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     store = Store(str(db_path), max(1, int(config.get('retention_days', 90))))
+    store.configure_vps(config.get('vps_paths', {}))
     with store.lock, store.db:
         identity = {'source_id': config['source_id'], 'controller': config['controller'].rstrip('/')}
         if store.meta('identity', identity) != identity:

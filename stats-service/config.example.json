@@ -13,5 +13,6 @@
   "static_dir": "dist",
   "allowed_origins": ["http://localhost:5173"],
   "host_refresh_interval": 60,
-  "router_dhcp": null
+  "router_dhcp": null,
+  "vps_paths": {}
 }

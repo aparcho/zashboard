@@ -233,7 +233,14 @@
               </div>
             </div>
             <div class="base-container overflow-x-auto p-4">
-              <h2 class="mb-3 font-medium">
+              <h2
+                class="mb-3 font-medium"
+                :title="
+                  dimension === 'vps'
+                    ? '中转与落地各计一次，同一 VPS 的协议合并；各行流量有重叠，占比以连接总量为基准，不能相加。'
+                    : undefined
+                "
+              >
                 {{ dimensions.find((d) => d.key === dimension)?.label }}排行
               </h2>
               <table class="table w-full">
@@ -432,6 +439,7 @@ const dimensions = [
   { key: 'device', label: '设备' },
   { key: 'policy', label: '分流策略' },
   { key: 'node', label: '代理节点' },
+  { key: 'vps', label: 'VPS' },
   { key: 'source_ip', label: '来源 IP' },
   { key: 'host', label: '目标域名' },
   { key: 'target_ip', label: '目标 IP' },

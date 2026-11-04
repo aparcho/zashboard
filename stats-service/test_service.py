@@ -30,6 +30,25 @@ class AccountingTests(unittest.TestCase):
     def query(self, dimension='device', **filters):
         return self.store.query({k: [str(v)] for k, v in dict(start=60, end=300, dimension=dimension, **filters).items()})
 
+    def test_vps_relay_both_ends_and_same_vps_deduplicated(self):
+        s = self.store
+        s.configure_vps({'HK-HKG':['HK','HKG','HK'], 'HKG-direct':['HKG']})
+        s.sample(payload(0,0),now=100)
+        s.sample(payload(150,300,connection(100,200),connection(50,100,id='b',node='HKG-direct')),now=101)
+        rows={r['key']:r for r in self.query('vps')['rows']}
+        self.assertEqual(rows['HK']['upload'],100)
+        self.assertEqual(rows['HKG']['upload'],150)
+        self.assertEqual(rows['HKG']['download'],300)
+        self.assertEqual(self.query('vps')['total'],{'upload':150,'download':300})
+        self.assertEqual(len(self.query('vps',source_ip='192.168.50.99')['rows']),0)
+        self.assertEqual(self.query('node')['rows'][0]['key'],'HK-HKG')
+
+    def test_vps_unknown_and_direct(self):
+        s=self.store
+        s.sample(payload(0,0),now=100)
+        s.sample(payload(30,60,connection(10,20,node='DIRECT'),connection(20,40,id='b',node='new-node')),now=101)
+        self.assertEqual([r['key'] for r in self.query('vps')['rows']],['未识别：new-node'])
+
     def test_baseline_delta_new_connection_and_no_double_count(self):
         s = self.store
         s.sample(payload(100, 200, connection()), now=100)
