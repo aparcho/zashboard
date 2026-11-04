@@ -29,3 +29,11 @@ coverage
 *.sw?
 
 *.tsbuildinfo
+
+# 统计私有数据与凭据
+stats-service/data/
+stats-service/config.json
+*.sqlite3
+*.sqlite3-*
+__pycache__/
+.env

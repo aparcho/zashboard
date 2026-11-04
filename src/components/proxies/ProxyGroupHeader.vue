@@ -6,12 +6,25 @@
       :icon-margin="proxyGroupIconMargin"
       class="text-base-content"
     />
-    <span
-      class="text-base-content/40 min-w-0 flex-1 truncate text-[11px] tracking-wider uppercase tabular-nums"
-      @mouseenter="checkTruncation"
+    <div
+      class="text-base-content/40 flex min-w-0 flex-1 items-center gap-1.5 text-[11px] tabular-nums"
+      data-group-metadata
     >
-      {{ proxyGroup.type }} · {{ proxiesCount }}
-    </span>
+      <span
+        class="min-w-0 truncate tracking-wider uppercase"
+        @mouseenter="checkTruncation"
+        >{{ proxyGroup.type }} · {{ proxiesCount }}</span
+      >
+      <span
+        class="text-base-content/25 shrink-0"
+        aria-hidden="true"
+        >·</span
+      >
+      <ProxyGroupTraffic
+        :name="name"
+        class="shrink-0"
+      />
+    </div>
     <ProxyGroupFilter :group-name="name" />
     <VisibilityToggle
       v-if="manageHiddenGroup"
@@ -31,9 +44,7 @@
     <div class="flex flex-1 items-center gap-2 truncate text-sm">
       <ProxyGroupNow :name="name" />
     </div>
-    <div class="text-base-content/40 min-w-12 shrink-0 text-right text-xs tabular-nums">
-      {{ prettyBytesHelper(downloadTotal) }}/s
-    </div>
+    <ProxyGroupSpeed :name="name" />
   </div>
 </template>
 
@@ -41,11 +52,9 @@
 import { hiddenGroupMap } from '@/store/proxies'
 import { useKeyboardShortcuts } from '@/composables/use-keyboard'
 import { KEYBOARD_SHORTCUT_ACTION } from '@/helper/keyboard'
-import { getDownloadSpeedByProxyGroup } from '@/helper/proxy-group-traffic'
 import { isHiddenGroup } from '@/helper'
 import { checkTruncation } from '@/helper/tooltip'
 import { useTooltip } from '@/composables/use-tooltip'
-import { prettyBytesHelper } from '@/helper/utils'
 import { proxyMap } from '@/assembly/proxies'
 import { manageHiddenGroup, proxyGroupIconMargin, proxyGroupIconSize } from '@/store/settings'
 import { twMerge } from 'tailwind-merge'
@@ -56,6 +65,8 @@ import LatencyTag from './LatencyTag.vue'
 import ProxyGroupFilter from './ProxyGroupFilter.vue'
 import ProxyGroupNow from './ProxyGroupNow.vue'
 import ProxyName from './ProxyName.vue'
+import ProxyGroupTraffic from './ProxyGroupTraffic.vue'
+import ProxyGroupSpeed from './ProxyGroupSpeed.vue'
 
 const props = defineProps<{
   name: string
@@ -71,8 +82,6 @@ const { t } = useI18n()
 const { getShortcutKey } = useKeyboardShortcuts()
 const { showTip } = useTooltip()
 const proxyGroup = computed(() => proxyMap.value[props.name])
-
-const downloadTotal = computed(() => getDownloadSpeedByProxyGroup(props.name))
 
 const hiddenGroup = computed({
   get: () => Boolean(isHiddenGroup(props.name)),

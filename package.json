@@ -1,6 +1,6 @@
 {
   "name": "zashboard",
-  "version": "3.29.1",
+  "version": "3.30.0",
   "description": "A Dashboard Using Clash API",
   "license": "MIT",
   "type": "module",
@@ -21,6 +21,7 @@
     "test:bench": "node test/bench.mjs",
     "test:mock": "node test/mock-server.mjs",
     "test:setup": "node test/setup.mjs",
+    "test:stats-ui": "node test/stats-ui.mjs",
     "test:verify": "node test/verify.mjs",
     "type-check": "vue-tsc --build --force"
   },

@@ -1,6 +1,7 @@
 import { getReverseDNSHostname } from '@/helper/reverse-dns'
 import { sourceIPLabelList } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
+import { getStatsDeviceLabel } from '@/store/traffic-stats'
 import * as ipaddr from 'ipaddr.js'
 import { watch } from 'vue'
 
@@ -99,6 +100,9 @@ const getManualIPLabel = (ip: string): string | null => {
 
 export const getIPLabelFromMap = (ip: string) => {
   if (!ip) return ip === '' ? 'Inner' : ''
+
+  const deviceLabel = getStatsDeviceLabel(ip)
+  if (deviceLabel) return deviceLabel
 
   const manualLabel = getManualIPLabel(ip)
   if (manualLabel !== null) return manualLabel

@@ -33,10 +33,13 @@
           <div class="setting-item-label">
             {{ $t('speedtestUrl') }}
           </div>
-          <TextInput
-            class="w-full flex-2"
+          <SelectInput
+            class="select select-sm w-full flex-2"
             v-model="speedtestUrl"
-            :clearable="true"
+            :options="[
+              { value: 'https://cp.cloudflare.com/generate_204', label: 'Cloudflare' },
+              { value: 'https://www.gstatic.com/generate_204', label: 'gstatic' },
+            ]"
           />
         </SettingItem>
         <SettingItem
@@ -240,7 +243,6 @@ import {
 import { QuestionMarkCircleIcon } from '@heroicons/vue/24/outline'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TextInput from '../../common/TextInput.vue'
 import GroupTestUrlsSettings from './GroupTestUrlsSettings.vue'
 import IconSettings from './IconSettings.vue'
 

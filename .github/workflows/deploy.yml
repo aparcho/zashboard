@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   release-please:
+    # Fork 使用 stats.yml，不发布上游域名和镜像。
+    if: github.repository == 'Zephyruso/zashboard'
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}

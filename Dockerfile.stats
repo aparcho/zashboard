@@ -1,0 +1,18 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /src
+RUN npm install -g pnpm@11.20.0
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
+COPY . .
+RUN pnpm type-check && pnpm build:no-fonts
+
+FROM python:3.13-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/*
+RUN useradd --uid 10001 --create-home stats && mkdir /data && chown stats:stats /data
+COPY --from=build /src/dist ./dist
+COPY stats-service/service.py stats-service/discovery.py stats-service/router_dhcp.py ./stats-service/
+USER stats
+VOLUME ["/data"]
+EXPOSE 9099
+CMD ["python3", "stats-service/service.py", "--config", "/config/config.json"]
