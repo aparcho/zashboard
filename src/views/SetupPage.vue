@@ -179,6 +179,14 @@ const autoDetect = async (candidates: SetupForm[]) => {
 if (urlBackend) {
   handleSubmit(urlBackend)
 } else if (backendList.value.length === 0) {
-  autoDetect(originBackend ? [originBackend, defaultForm] : [defaultForm])
+  const candidates: SetupForm[] = []
+  if (originBackend) {
+    candidates.push(originBackend)
+    if (originBackend.port !== '9090') {
+      candidates.push({ ...originBackend, port: '9090', secondaryPath: '' })
+    }
+  }
+  candidates.push(defaultForm)
+  autoDetect(candidates)
 }
 </script>

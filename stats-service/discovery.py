@@ -66,7 +66,7 @@ def mdns_names(addresses, interface=None, timeout=1.2):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind(('', 0)); sock.settimeout(.2)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 255)
-        if interface:
+        if interface and interface not in ('0.0.0.0', '127.0.0.1', '::', '::1'):
             try:sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(interface))
             except OSError:pass
         for index in range(0, len(questions), 5):
@@ -80,37 +80,6 @@ def mdns_names(addresses, interface=None, timeout=1.2):
             for owner, name in ptr_answers(data).items():
                 if owner in owners:result[owners[owner]] = name
     return result
-
-
-def dns_name(address, server, timeout=.5):
-    owner, q = question(address)
-    identifier = os.urandom(2)
-    packet = identifier + struct.pack('!5H', 0x100, 1, 0, 0, 0) + q
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.settimeout(timeout);sock.connect((server, 53));sock.send(packet)
-        data = sock.recv(65535)
-        if data[:2] != identifier:return None
-        return ptr_answers(data).get(owner)
-
-
-def netbios_name(address, timeout=.3):
-    raw = b'*' + b'\0' * 15
-    encoded = b''.join(bytes([65+(b>>4), 65+(b&15)]) for b in raw)
-    identifier = os.urandom(2)
-    packet = identifier + struct.pack('!5H', 0, 1, 0, 0, 0) + b'\x20' + encoded + b'\0\x00\x21\x00\x01'
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.settimeout(timeout);sock.connect((address, 137));sock.send(packet);data=sock.recv(4096)
-    if data[:2] != identifier:return None
-    try:
-        _, offset = _name(data, 12);offset += 4
-        _, offset = _name(data, offset);offset += 10
-        count=data[offset];offset+=1
-        for _ in range(count):
-            record=data[offset:offset+18];offset+=18
-            if len(record)==18 and record[15]==0 and not struct.unpack('!H', record[16:])[0] & 0x8000:
-                return record[:15].decode('utf-8','replace').strip()
-    except (ValueError,IndexError,struct.error):pass
-    return None
 
 
 def neighbors():
@@ -167,8 +136,8 @@ class HostDiscovery(threading.Thread):
 
     def refresh(self):
         links=neighbors()
-        with self.store.lock:
-            sources={row[0] for row in self.store.db.execute('SELECT DISTINCT source_ip FROM buckets WHERE minute>=?',(time.time()-1800,))}
+        with self.store.read_conn() as db:
+            sources={row[0] for row in db.execute('SELECT DISTINCT source_ip FROM buckets WHERE minute>=?',(time.time()-1800,))}
         addresses=[]
         for source in sources | set(links):
             try:

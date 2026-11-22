@@ -99,7 +99,6 @@ import {
   openDeviceEditor,
   shanghaiMonth,
   statsRequest,
-  verifyStatsSource,
   statsDevices,
 } from '@/store/traffic-stats'
 import { computed, ref, watch } from 'vue'
@@ -120,7 +119,6 @@ async function load() {
   busy.value = true
   error.value = ''
   try {
-    await verifyStatsSource()
     const result = await statsRequest<Usage>(
       `device-usage?month=${encodeURIComponent(month.value)}`,
     )

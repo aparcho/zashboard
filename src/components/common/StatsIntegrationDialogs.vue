@@ -167,7 +167,6 @@ import {
   statsSettingsOpen,
   statsToken,
   trafficDetailsGroup,
-  verifyStatsSource,
 } from '@/store/traffic-stats'
 import { computed, ref, watch } from 'vue'
 const token = ref('')
@@ -221,7 +220,6 @@ async function saveDevice() {
   deviceBusy.value = true
   deviceError.value = ''
   try {
-    await verifyStatsSource()
     if (backendId !== activeBackend.value?.uuid) throw new Error('后端已切换，请重试')
     await statsRequest('devices', {
       id: deviceId.value,
@@ -251,7 +249,6 @@ async function loadDetail() {
   detailTotals.value = null
   detailError.value = ''
   try {
-    await verifyStatsSource()
     const value = await statsRequest<GroupTotals>(
       `group-totals?month=${encodeURIComponent(detailMonth.value)}`,
     )

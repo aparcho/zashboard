@@ -149,11 +149,11 @@
               >
                 <option value="">全部设备</option>
                 <option
-                  v-for="d in devices"
+                  v-for="d in deviceOptions"
                   :key="d.id"
                   :value="d.id"
                 >
-                  {{ d.name }}
+                  {{ d.label }}
                 </option>
               </select>
             </label>
@@ -170,6 +170,12 @@
                 v-model="ipFilter"
                 class="input w-full"
                 placeholder="全部地址"
+            /></label>
+            <label class="flex flex-col gap-1 text-sm"
+              >VPS<input
+                v-model="vpsFilter"
+                class="input w-full"
+                placeholder="全部 VPS"
             /></label>
             <div class="flex items-end gap-2">
               <button
@@ -202,7 +208,7 @@
                 流量趋势 <span class="text-xs font-normal opacity-60">每小时汇总 · 可横向滚动</span>
               </h2>
               <p
-                v-if="!summary.series.length"
+                v-if="!filledSeries.length"
                 class="py-8 text-center text-sm opacity-60"
               >
                 该时段暂无已归属流量
@@ -213,19 +219,26 @@
               >
                 <div
                   class="flex h-40 items-end gap-2"
-                  :style="{ minWidth: `${Math.max(summary.series.length * 42, 240)}px` }"
+                  :style="{ minWidth: `${Math.max(filledSeries.length * 42, 240)}px` }"
                 >
                   <div
-                    v-for="point in summary.series"
+                    v-for="point in filledSeries"
                     :key="point.at"
                     class="flex h-full w-16 shrink-0 flex-col justify-end gap-1"
                     :title="`${date(point.at)} 上传 ${bytes(point.upload)}，下载 ${bytes(point.download)}`"
                   >
                     <span
-                      class="bg-primary/70 min-h-0.5 rounded-t"
-                      :style="{
-                        height: `${((point.upload + point.download) / seriesMax) * 110}px`,
-                      }"
+                      class="rounded-t"
+                      :class="
+                        point.upload + point.download > 0
+                          ? 'bg-primary/70 min-h-0.5'
+                          : 'bg-base-300/60 h-0.5'
+                      "
+                      :style="
+                        point.upload + point.download > 0
+                          ? { height: `${((point.upload + point.download) / seriesMax) * 110}px` }
+                          : undefined
+                      "
                     />
                     <span class="text-center text-[10px] opacity-60">{{ hour(point.at) }}</span>
                   </div>
@@ -301,6 +314,14 @@
                 class="mt-2 text-xs opacity-60"
               >
                 最多显示前 500 项，总计包含全部项目。
+              </p>
+              <p
+                v-if="dimension === 'vps' && summary.unmapped_nodes?.length"
+                class="mt-2 text-xs opacity-60"
+              >
+                未识别节点（{{ summary.unmapped_nodes.length }}）：{{
+                  summary.unmapped_nodes.join('、')
+                }}
               </p>
             </div>
             <div class="base-container space-y-2 p-4 text-xs opacity-70">
@@ -404,15 +425,16 @@
 
 <script setup lang="ts">
 import { usePaddingForViews } from '@/composables/use-padding-for-views'
+import { prettyBytesHelper } from '@/helper/utils'
 import { activeBackend } from '@/store/setup'
 import {
   getStatsDeviceLabel,
-  refreshStatsLabels,
   saveStatsConfig,
   statsConfig,
   statsRequest,
   statsToken,
   statsAutoMode,
+  syncStatsDevices,
   ensureAutoStats,
   verifyStatsSource,
   type Device,
@@ -449,9 +471,18 @@ const period = ref('today')
 const deviceFilter = ref('')
 const policyFilter = ref('')
 const ipFilter = ref('')
+const vpsFilter = ref('')
 const deviceId = ref('')
 const deviceName = ref('')
 const deviceIPs = ref('')
+const deviceOptions = computed(() => {
+  const counts = new Map<string, number>()
+  for (const d of devices.value) counts.set(d.name, (counts.get(d.name) ?? 0) + 1)
+  return devices.value.map((d) => ({
+    id: d.id,
+    label: (counts.get(d.name) ?? 0) > 1 && d.ips.length ? `${d.name} (${d.ips[0]})` : d.name,
+  }))
+})
 const totalCards = computed(() => [
   { label: '已归属上传', value: summary.value?.total.upload ?? 0 },
   { label: '已归属下载', value: summary.value?.total.download ?? 0 },
@@ -460,14 +491,23 @@ const totalCards = computed(() => [
     value: (summary.value?.total.upload ?? 0) + (summary.value?.total.download ?? 0),
   },
 ])
+const filledSeries = computed(() => {
+  const raw = summary.value?.series ?? []
+  if (!raw.length || !summary.value) return []
+  const byHour = new Map(raw.map((p) => [p.at, p]))
+  const startHour = Math.floor(summary.value.start / 3600) * 3600
+  const endHour = Math.floor(Math.max(summary.value.end - 1, summary.value.start) / 3600) * 3600
+  if (endHour - startHour > 744 * 3600) return raw
+  const result: { at: number; upload: number; download: number }[] = []
+  for (let at = startHour; at <= endHour; at += 3600) {
+    result.push(byHour.get(at) ?? { at, upload: 0, download: 0 })
+  }
+  return result
+})
 const seriesMax = computed(() =>
-  Math.max(1, ...(summary.value?.series.map((p) => p.upload + p.download) ?? [])),
+  Math.max(1, ...filledSeries.value.map((p) => p.upload + p.download)),
 )
-const bytes = (n: number) => {
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
-  const exponent = n > 0 ? Math.min(4, Math.floor(Math.log(n) / Math.log(1024))) : 0
-  return `${(n / 1024 ** exponent).toFixed(exponent ? 2 : 0)} ${units[exponent]}`
-}
+const bytes = (n: number) => prettyBytesHelper(n, { binary: true })
 const date = (at: number | null) =>
   at
     ? new Date(at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
@@ -501,13 +541,17 @@ function range() {
   }
 }
 let generation = 0
+let activeAbort: AbortController | null = null
 async function reload() {
-  if (busy.value) return
+  activeAbort?.abort()
+  const controller = new AbortController()
+  activeAbort = controller
   const current = ++generation
   busy.value = true
   error.value = ''
   try {
     const nextStatus = await verifyStatsSource()
+    if (current !== generation) return
     const { start, end } = range()
     const query = new URLSearchParams({
       dimension: dimension.value,
@@ -516,21 +560,27 @@ async function reload() {
       device: deviceFilter.value,
       policy: policyFilter.value.trim(),
       source_ip: ipFilter.value.trim(),
+      vps: vpsFilter.value.trim(),
     })
     const [nextSummary, nextDevices] = await Promise.all([
-      statsRequest<StatsSummary>(`summary?${query}`),
-      statsRequest<Device[]>('devices'),
+      statsRequest<StatsSummary>(`summary?${query}`, undefined, {
+        timeoutMs: 30000,
+        signal: controller.signal,
+      }),
+      statsRequest<Device[]>('devices', undefined, { signal: controller.signal }),
     ])
     if (current !== generation) return
     status.value = nextStatus
     summary.value = nextSummary
     devices.value = nextDevices
-    await refreshStatsLabels()
+    syncStatsDevices(nextDevices)
   } catch (e) {
-    if (current !== generation) return
+    if (current !== generation || controller.signal.aborted) return
     error.value = e instanceof Error ? e.message : '统计服务连接失败'
-    status.value = null
-    summary.value = null
+    if (error.value.includes('采集源 ID 不一致')) {
+      status.value = null
+      summary.value = null
+    }
   } finally {
     if (current === generation) busy.value = false
   }
@@ -544,7 +594,7 @@ async function connect() {
   }
 }
 function clearFilters() {
-  deviceFilter.value = policyFilter.value = ipFilter.value = ''
+  deviceFilter.value = policyFilter.value = ipFilter.value = vpsFilter.value = ''
   void reload()
 }
 function resetDevice() {
@@ -560,7 +610,6 @@ async function mutate(path: string, data: unknown) {
   busy.value = true
   error.value = ''
   try {
-    await verifyStatsSource()
     await statsRequest(path, data)
     busy.value = false
     await reload()
@@ -604,6 +653,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   generation++
+  activeAbort?.abort()
   clearInterval(timer)
 })
 </script>

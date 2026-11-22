@@ -174,7 +174,7 @@ class AccountingTests(unittest.TestCase):
             s.db.execute('PRAGMA user_version=1')
             s.db.commit(); s.db.close()
             s = Store(path)
-            self.assertEqual(s.db.execute('PRAGMA user_version').fetchone()[0], 3)
+            self.assertEqual(s.db.execute('PRAGMA user_version').fetchone()[0], 4)
             self.assertEqual(s.db.execute('SELECT COUNT(*) FROM chain_totals').fetchone()[0], 0)
             s.sample(payload(20, 40, connection(20, 40)), now=102)
             self.assertEqual(s.db.execute('SELECT download FROM chain_totals WHERE name=?', ('YouTube',)).fetchone()[0], 20)
@@ -249,7 +249,84 @@ class AccountingTests(unittest.TestCase):
                 s=Store(path)
                 self.assertEqual(s.group_totals('1970-01')['rows'][0]['download'],20)
                 self.assertEqual(s.device_usage('1970-01')['rows'][0]['download'],20)
-                s.db.close()
+                s.close()
+
+    def test_buckets_hourly_migration_and_buffered_flush(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = str(Path(temp) / 'stats.sqlite3')
+            s = Store(path)
+            s.sample(payload(0, 0), now=3600, commit=False)
+            s.sample(payload(100, 200, connection(100, 200)), now=3601, commit=False)
+            s.sample(payload(150, 350, connection(150, 350)), now=3602, commit=False)
+            # 未 flush 前主库为空，flush 后落盘且 buckets 与 buckets_hourly 一致
+            self.assertEqual(s.db.execute('SELECT COUNT(*) FROM buckets_hourly').fetchone()[0], 0)
+            s.flush()
+            q = s.query({'dimension': ['node'], 'start': ['3600'], 'end': ['7200']})
+            self.assertEqual(q['total'], {'upload': 150, 'download': 350})
+            self.assertEqual(q['series'], [{'at': 3600, 'upload': 150, 'download': 350}])
+            # 模拟旧库清空 hourly 表并重新打开触发迁移
+            s.db.execute('DELETE FROM buckets_hourly')
+            s.db.execute("DELETE FROM meta WHERE key='hourly_migrated'")
+            s.db.commit()
+            s.close()
+            s2 = Store(path)
+            q2 = s2.query({'dimension': ['node'], 'start': ['3600'], 'end': ['7200']})
+            self.assertEqual(q2['total'], {'upload': 150, 'download': 350})
+            s2.close()
+
+    def test_manual_binding_not_overwritten_by_router_dhcp(self):
+        s = Store(':memory:')
+        s.save_device({'name': '我的主电脑', 'ips': ['192.168.50.10']}, now=100)
+        s.discover_hosts(
+            [{'ip': '192.168.50.10', 'mac': 'aa:bb:cc:dd:ee:01', 'name': 'dhcp-auto', 'source': '主路由 DHCP'}],
+            {'192.168.50.10': 'aa:bb:cc:dd:ee:01'},
+            now=110,
+        )
+        labels = {ip: d['name'] for d in s.devices() for ip in d['ips']}
+        self.assertEqual(labels['192.168.50.10'], '我的主电脑')
+        s.close()
+
+    def test_vps_auto_parse_and_filter(self):
+        s = Store(':memory:')
+        s.configure_vps({'HKL-Reality-v4': ['HKL'], 'LAX-Reality-v6': ['LAX'], 'LEGEND-LAX-Reality-v4': ['LEGEND-LAX'], 'HKG-Reality': ['HKG']})
+        s.sample(payload(0, 0), now=3600)
+        s.sample(payload(60, 120,
+            connection(10, 20, id='a', node='SV-via-SVCN2-Reality'),
+            connection(20, 40, id='b', node='HKL-SS-v6'),
+            connection(15, 30, id='c', node='HKL-HKG-v4-XHTTP'),
+            connection(15, 30, id='d', node='Legend-LAX-HY2'),
+        ), now=3601)
+        q = s.query({'dimension': ['vps'], 'start': ['3600'], 'end': ['7200']})
+        by_vps = {r['key']: r['download'] for r in q['rows']}
+        self.assertEqual(by_vps['SV'], 20)
+        self.assertEqual(by_vps['SVCN2'], 20)
+        self.assertEqual(by_vps['HKL'], 70)
+        self.assertEqual(by_vps['HKG'], 30)
+        self.assertEqual(by_vps['LEGEND-LAX'], 30)
+        self.assertNotIn('unmapped_nodes', q)
+        qf = s.query({'dimension': ['node'], 'start': ['3600'], 'end': ['7200'], 'vps': ['HKL']})
+        self.assertEqual({r['key'] for r in qf['rows']}, {'HKL-SS-v6', 'HKL-HKG-v4-XHTTP'})
+        s.close()
+
+    def test_vps_name_parsing_edge_cases(self):
+        from service import resolve_vps_path
+        known = {k: k for k in ('HK', 'HKL', 'HKG', 'LAX', 'LEGEND-LAX', 'OCI')}
+        cases = {
+            'HKL-HKN-via-HKG': ['HKG', 'HKL', 'HKN'],
+            'HKT-原生-HKN-via-HKG': ['HKG', 'HKT', 'HKN'],
+            'HKN-原生66-SS-via-HKG': ['HKG', 'HKN'],
+            'HKL-HKN-direct-v4': ['HKL', 'HKN'],
+            'HK-v6-HKL-SS-Exit-v4': ['HK', 'HKL'],
+            'LEGEND-LAX-via-LAX-SS-v6': ['LAX', 'LEGEND-LAX'],
+            'Legend-LAX-HY2': ['LEGEND-LAX'],
+            'OCI-Reality-v4-MO-WARP': ['OCI'],
+            'HKL-Reality-v4-US-Residential': ['HKL'],
+            'Reality-cmin2-v6': [],
+        }
+        for node, expected in cases.items():
+            self.assertEqual(resolve_vps_path(node, {}, canonical_map=known), expected, node)
+        # 精确配置优先于自动解析
+        self.assertEqual(resolve_vps_path('HKL-HKN-via-HKG', {'HKL-HKN-via-HKG': ['X']}, canonical_map=known), ['X'])
 
 
 
@@ -284,6 +361,7 @@ class HTTPTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 401)
         with self.request('status', origin='http://localhost:5173') as response:
             self.assertEqual(response.headers['Access-Control-Allow-Origin'], 'http://localhost:5173')
+            self.assertEqual(response.headers['X-Stats-Source-Id'], 'test')
             self.assertEqual(json.load(response)['source_id'], 'test')
         with self.request('devices', {'name': '电脑', 'ips': ['192.168.1.2']}) as response:
             self.assertTrue(json.load(response)['id'])

@@ -36,10 +36,7 @@
           <SelectInput
             class="select select-sm w-full flex-2"
             v-model="speedtestUrl"
-            :options="[
-              { value: 'https://cp.cloudflare.com/generate_204', label: 'Cloudflare' },
-              { value: 'https://www.gstatic.com/generate_204', label: 'gstatic' },
-            ]"
+            :options="speedtestUrlOptions"
           />
         </SettingItem>
         <SettingItem
@@ -273,6 +270,17 @@ const speedtestModeTip = (e: Event) => {
 const independentLatencyTestTip = (e: Event) => {
   return showTip(e, t('independentLatencyTestTip'))
 }
+
+const speedtestUrlOptions = computed(() => {
+  const presets = [
+    { value: 'https://cp.cloudflare.com/generate_204', label: 'Cloudflare' },
+    { value: 'https://www.gstatic.com/generate_204', label: 'gstatic' },
+  ]
+  if (speedtestUrl.value && !presets.some((item) => item.value === speedtestUrl.value)) {
+    return [{ value: speedtestUrl.value, label: speedtestUrl.value }, ...presets]
+  }
+  return presets
+})
 
 const handlerProxyCardSizeChange = () => {
   minProxyCardWidth.value = getMinCardWidth(proxyCardSize.value)

@@ -38,6 +38,7 @@ export type StatsSummary = {
   start: number
   end: number
   truncated: boolean
+  unmapped_nodes?: string[]
 }
 
 const configs = useStorage<Record<string, StatsConfig>>('stats/service-configs', {})
@@ -50,6 +51,14 @@ export const statsToken = ref('')
 export const statsAutoMode = ref(false)
 let autoConnection: { id: string; promise: Promise<void> } | null = null
 export const statsDevices = ref<Device[]>([])
+let lastDevicesFingerprint = ''
+export function syncStatsDevices(devices: Device[]) {
+  const fingerprint = JSON.stringify(devices)
+  if (fingerprint !== lastDevicesFingerprint) {
+    lastDevicesFingerprint = fingerprint
+    statsDevices.value = devices
+  }
+}
 const canonicalIP = (address: string) => {
   try {
     return ipaddr.process(address.split('%')[0]!).toString()
@@ -116,13 +125,19 @@ export async function ensureAutoStats() {
   }
 }
 
-export async function statsRequest<T>(path: string, body?: unknown): Promise<T> {
+export async function statsRequest<T>(
+  path: string,
+  body?: unknown,
+  options?: { timeoutMs?: number; signal?: AbortSignal },
+): Promise<T> {
   if (!statsConfig.value?.sourceId || (!statsToken.value && !statsAutoMode.value))
     await ensureAutoStats()
   const config = statsConfig.value
   const token = statsToken.value
   const backendId = activeBackend.value?.uuid
   if (!config?.sourceId || (!token && !statsAutoMode.value)) throw new Error('统计服务暂不可用')
+  const timeoutSignal = AbortSignal.timeout(options?.timeoutMs ?? 15000)
+  const signal = options?.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal
   const response = await fetch(`${config.url}/api/stats/${path}`, {
     method: body === undefined ? 'GET' : 'PUT',
     headers: {
@@ -130,10 +145,13 @@ export async function statsRequest<T>(path: string, body?: unknown): Promise<T> 
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(10000),
+    signal,
     cache: 'no-store',
     credentials: 'omit',
   })
+  const headerSourceId = response.headers.get('X-Stats-Source-Id')
+  if (headerSourceId && headerSourceId !== config.sourceId)
+    throw new Error('采集源 ID 不一致，已停止加载，避免混入其他 Nikki 的数据')
   const data = await response.json().catch(() => {
     throw new Error('统计服务未返回 JSON，请检查服务地址')
   })
@@ -159,18 +177,21 @@ export async function refreshStatsLabels() {
   const generation = ++labelGeneration
   const id = activeBackend.value?.uuid
   try {
-    await verifyStatsSource()
     const devices = await statsRequest<Device[]>('devices')
     if (generation === labelGeneration && id === activeBackend.value?.uuid)
-      statsDevices.value = devices
+      syncStatsDevices(devices)
   } catch {
-    if (generation === labelGeneration) statsDevices.value = []
+    if (generation === labelGeneration) {
+      lastDevicesFingerprint = ''
+      statsDevices.value = []
+    }
   }
 }
 
 watch(
   () => activeBackend.value?.uuid,
   (id) => {
+    lastDevicesFingerprint = ''
     statsDevices.value = []
     statsAutoMode.value = false
     autoConnection = null
@@ -212,7 +233,6 @@ export async function refreshGroupTotals() {
   const generation = ++groupGeneration
   groupPending = generation
   try {
-    await verifyStatsSource()
     const totals = await statsRequest<GroupTotals>('group-totals')
     if (generation !== groupGeneration) return
     groupTotals.value = totals
