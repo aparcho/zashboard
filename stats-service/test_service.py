@@ -328,6 +328,17 @@ class AccountingTests(unittest.TestCase):
         # 精确配置优先于自动解析
         self.assertEqual(resolve_vps_path('HKL-HKN-via-HKG', {'HKL-HKN-via-HKG': ['X']}, canonical_map=known), ['X'])
 
+    def test_read_conn_pool_does_not_leak_across_ephemeral_threads(self):
+        with tempfile.TemporaryDirectory() as temp:
+            s = Store(str(Path(temp) / 'stats.sqlite3'))
+            s.sample(payload(0, 0), now=3600)
+            for _ in range(40):
+                t = threading.Thread(target=lambda: s.device_usage('1970-01'))
+                t.start()
+                t.join()
+            self.assertLessEqual(s._read_pool.qsize(), 4)
+            s.close()
+
 
 
 class HTTPTests(unittest.TestCase):

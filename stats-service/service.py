@@ -9,6 +9,7 @@ import json
 import mimetypes
 import os
 from pathlib import Path
+import queue
 import re
 import signal
 import sqlite3
@@ -125,9 +126,7 @@ class Store:
         self.path = str(path)
         self._is_memory = self.path == ':memory:' or self.path.startswith('file::memory:')
         self.lock = threading.RLock()
-        self._local = threading.local()
-        self._read_conns = []
-        self._read_conns_lock = threading.Lock()
+        self._read_pool = queue.LifoQueue(maxsize=4)
         self.db = sqlite3.connect(self.path, check_same_thread=False, timeout=5)
         self.db.row_factory = sqlite3.Row
         self.retention = max(1, int(retention_days))
@@ -211,25 +210,27 @@ class Store:
             with self.lock:
                 yield self.db
             return
-        conn = getattr(self._local, 'conn', None)
-        if conn is None:
-            conn = sqlite3.connect(f'file:{self.path}?mode=ro', uri=True, timeout=5)
+        try:
+            conn = self._read_pool.get_nowait()
+        except queue.Empty:
+            conn = sqlite3.connect(f'file:{self.path}?mode=ro', uri=True, check_same_thread=False, timeout=5)
             conn.row_factory = sqlite3.Row
             conn.executescript('PRAGMA query_only=ON; PRAGMA busy_timeout=5000; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-8000;')
-            self._local.conn = conn
-            with self._read_conns_lock:
-                self._read_conns.append(conn)
-        yield conn
+        try:
+            yield conn
+        finally:
+            try:
+                self._read_pool.put_nowait(conn)
+            except queue.Full:
+                conn.close()
 
     def close(self):
         self.flush()
-        with self._read_conns_lock:
-            for conn in self._read_conns:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
-            self._read_conns.clear()
+        while True:
+            try:
+                self._read_pool.get_nowait().close()
+            except queue.Empty:
+                break
         with self.lock:
             self.db.close()
 
