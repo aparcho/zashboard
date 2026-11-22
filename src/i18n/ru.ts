@@ -1,6 +1,9 @@
 import type { LANG_MESSAGE } from './en'
 
 const ru: LANG_MESSAGE = {
+  trafficStatistics: '累计统计连接',
+  clientHostname: 'Исходный хост',
+  trafficStats: '流量统计',
   setup: 'Настройка',
   overview: 'Обзор',
   proxies: 'Прокси',

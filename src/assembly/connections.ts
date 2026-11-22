@@ -170,8 +170,13 @@ export const getConnectionDisplayValue = (
       return prettyBytesHelper(accessor.upload(connection))
     case CONNECTIONS_TABLE_ACCESSOR_KEY.ConnectTime:
       return fromNow(accessor.start(connection))
+    case CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname: {
+      const address = accessor.sourceIP(connection)
+      const label = getIPLabelFromMap(address)
+      return address && label !== address ? label : ''
+    }
     case CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP:
-      return getIPLabelFromMap(accessor.sourceIP(connection))
+      return accessor.sourceIP(connection)
     case CONNECTIONS_TABLE_ACCESSOR_KEY.SourcePort:
       return accessor.sourcePort(connection)
     case CONNECTIONS_TABLE_ACCESSOR_KEY.SniffHost:

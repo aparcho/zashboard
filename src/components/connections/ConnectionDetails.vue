@@ -28,6 +28,13 @@
         />
       </div>
 
+      <button
+        v-if="sourceIP"
+        class="btn btn-ghost btn-sm mx-4 mt-3 self-start"
+        @click="openDeviceEditor(sourceIP)"
+      >
+        编辑设备名称与 IP 绑定
+      </button>
       <div
         v-if="activeTab === 'overview'"
         class="flex flex-1 flex-col gap-3 overflow-y-auto p-4"
@@ -172,6 +179,7 @@
 </template>
 
 <script setup lang="ts">
+import { openDeviceEditor } from '@/store/traffic-stats'
 import { getIPInfo, type IPInfo } from '@/api/geoip'
 import { can } from '@/assembly/backend'
 import { getConnectionDisplayValue } from '@/assembly/connections'
@@ -306,6 +314,7 @@ const sectionDefs: { id: string; keys: CONNECTIONS_TABLE_ACCESSOR_KEY[] }[] = [
   {
     id: 'sourceAndDestination',
     keys: [
+      KEY.ClientHostname,
       KEY.SourceIP,
       KEY.SourcePort,
       KEY.Host,

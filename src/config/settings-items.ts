@@ -47,6 +47,12 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         section: 'settingsSectionCurrentBackend',
       },
       {
+        key: `${SETTINGS_MENU_KEY.backend}.trafficStatistics`,
+        label: 'trafficStatistics',
+        section: 'settingsSectionCurrentBackend',
+        keywords: ['流量', '累计', '统计', '令牌', 'SQLite'],
+      },
+      {
         key: `${SETTINGS_MENU_KEY.backend}.upgradeCore`,
         label: 'upgradeCore',
         section: 'settingsSectionCoreOperations',

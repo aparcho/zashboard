@@ -7,12 +7,25 @@
       {{ proxyGroup.name }}
     </div>
     <div
-      class="text-base-content/40 flex min-w-0 items-center gap-2 truncate text-[11px]"
+      class="text-base-content/40 flex min-w-0 items-center gap-1.5 text-[11px] tabular-nums"
       :class="proxyGroup.icon && 'pr-12'"
+      data-group-metadata
     >
-      <span class="shrink-0 tracking-wider whitespace-nowrap uppercase tabular-nums">
-        {{ proxyGroup.type }} · {{ proxiesCount }}
-      </span>
+      <span
+        v-if="displayContent"
+        class="min-w-0 truncate tracking-wider uppercase"
+        >{{ proxyGroup.type }} ·</span
+      >
+      <span class="shrink-0">{{ proxiesCount }}</span>
+      <span
+        class="text-base-content/25 shrink-0"
+        aria-hidden="true"
+        >·</span
+      >
+      <ProxyGroupTraffic
+        :name="name"
+        class="shrink-0"
+      />
       <ProxyGroupFilter
         v-if="displayContent"
         :group-name="name"
@@ -32,12 +45,11 @@
           :mobile="true"
         />
       </div>
-      <div
+      <ProxyGroupSpeed
         v-if="!twoColumnProxyGroup || displayContent"
-        class="text-base-content/40 mr-2 min-w-12 shrink-0 text-right text-xs tabular-nums"
-      >
-        {{ prettyBytesHelper(downloadTotal) }}/s
-      </div>
+        :name="name"
+        class="mr-2"
+      />
       <LatencyTag
         :class="twMerge('bg-base-200/40 hover:bg-base-200/70 z-10')"
         :loading="isLatencyTesting"
@@ -60,11 +72,9 @@
 import { hiddenGroupMap } from '@/store/proxies'
 import { useKeyboardShortcuts } from '@/composables/use-keyboard'
 import { KEYBOARD_SHORTCUT_ACTION } from '@/helper/keyboard'
-import { getDownloadSpeedByProxyGroup } from '@/helper/proxy-group-traffic'
 import { isHiddenGroup } from '@/helper'
 import { proxyMap } from '@/assembly/proxies'
 import { useTooltip } from '@/composables/use-tooltip'
-import { prettyBytesHelper } from '@/helper/utils'
 import { manageHiddenGroup, twoColumnProxyGroup } from '@/store/settings'
 import { twMerge } from 'tailwind-merge'
 import { computed } from 'vue'
@@ -74,6 +84,8 @@ import LatencyTag from './LatencyTag.vue'
 import ProxyGroupFilter from './ProxyGroupFilter.vue'
 import ProxyGroupNow from './ProxyGroupNow.vue'
 import ProxyIcon from './ProxyIcon.vue'
+import ProxyGroupTraffic from './ProxyGroupTraffic.vue'
+import ProxyGroupSpeed from './ProxyGroupSpeed.vue'
 
 const props = defineProps<{
   name: string
@@ -90,8 +102,6 @@ const { t } = useI18n()
 const { getShortcutKey } = useKeyboardShortcuts()
 const { showTip } = useTooltip()
 const proxyGroup = computed(() => proxyMap.value[props.name])
-
-const downloadTotal = computed(() => getDownloadSpeedByProxyGroup(props.name))
 
 const hiddenGroup = computed({
   get: () => Boolean(isHiddenGroup(props.name)),

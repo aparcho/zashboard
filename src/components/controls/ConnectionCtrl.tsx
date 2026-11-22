@@ -33,9 +33,11 @@ import {
   sourceIPFilter,
 } from '@/store/connections'
 import { isConnectionCard } from '@/store/settings'
+import { deviceUsageOpen } from '@/store/traffic-stats'
 import {
   BarsArrowDownIcon,
   BarsArrowUpIcon,
+  ChartBarIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   FunnelIcon,
@@ -284,8 +286,19 @@ export default defineComponent({
         </div>
       )
 
+      const usageButton = (
+        <button
+          class="btn btn-circle btn-sm"
+          aria-label="设备用量"
+          onClick={() => (deviceUsageOpen.value = true)}
+          onMouseenter={(e) => showTip(e, '设备用量', { appendTo: 'parent' })}
+        >
+          <ChartBarIcon class="h-4 w-4" />
+        </button>
+      )
       const buttons = (
         <>
+          {usageButton}
           <button
             class="btn btn-circle btn-sm"
             onClick={() => {

@@ -1,6 +1,9 @@
 import type { LANG_MESSAGE } from './en'
 
 const zh: LANG_MESSAGE = {
+  trafficStatistics: '累计统计连接',
+  clientHostname: '源主机',
+  trafficStats: '流量统计',
   setup: '配置',
   overview: '概览',
   proxies: '代理',

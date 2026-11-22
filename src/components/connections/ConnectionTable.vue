@@ -217,6 +217,8 @@
 
 <script setup lang="ts">
 import { can } from '@/assembly/backend'
+import { getConnectionSourceIP } from '@/helper'
+import { openDeviceEditor } from '@/store/traffic-stats'
 import {
   blockConnectionById,
   disconnectById,
@@ -305,6 +307,7 @@ const columnWidthMap = useStorage('config/table-column-width', {
   [CONNECTIONS_TABLE_ACCESSOR_KEY.Outbound]: 80,
   [CONNECTIONS_TABLE_ACCESSOR_KEY.Type]: 150,
   [CONNECTIONS_TABLE_ACCESSOR_KEY.Process]: 150,
+  [CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname]: 160,
   [CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP]: 150,
   [CONNECTIONS_TABLE_ACCESSOR_KEY.SourcePort]: 100,
   [CONNECTIONS_TABLE_ACCESSOR_KEY.SniffHost]: 200,
@@ -515,6 +518,36 @@ const columnDefinitions: ColumnDef<Connection>[] = [
     cell: highlightedCell(CONNECTIONS_TABLE_ACCESSOR_KEY.Upload),
     sortingFn: (prev, next) =>
       getConnectionUpload(prev.original) - getConnectionUpload(next.original),
+  },
+  {
+    header: () => t(CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname),
+    id: CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname,
+    accessorFn: (original) =>
+      getTableDisplayValue(original, CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname),
+    cell: (info) =>
+      h(
+        'button',
+        {
+          class: 'hover:text-primary min-w-16 text-left',
+          disabled: !getConnectionSourceIP(info.row.original),
+          'data-device-ip': getConnectionSourceIP(info.row.original),
+          title: '编辑设备名称与 IP 绑定',
+          onClick: (event: MouseEvent) => {
+            event.stopPropagation()
+            openDeviceEditor(getConnectionSourceIP(info.row.original))
+          },
+        },
+        [
+          h(HighlightText, {
+            text:
+              getTableDisplayValue(
+                info.row.original,
+                CONNECTIONS_TABLE_ACCESSOR_KEY.ClientHostname,
+              ) || '—',
+            filter: connectionFilter.value,
+          }),
+        ],
+      ),
   },
   {
     header: () => t(CONNECTIONS_TABLE_ACCESSOR_KEY.SourceIP),

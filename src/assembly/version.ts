@@ -4,7 +4,7 @@ import MetacubexLogo from '@/assets/images/metacubex.jpg'
 import { MIHOMO, MIHOMO_CHANNEL } from '@/constant'
 import { fetchWithLocalCache } from '@/helper/cache'
 import { getRequestErrorMessage } from '@/helper/request-error'
-import { autoUpgradeCore, autoUpgradeDashboard, checkUpgradeCore } from '@/store/settings'
+import { autoUpgradeCore, checkUpgradeCore } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
 import type { Backend } from '@/types'
 import { computed, nextTick, ref } from 'vue'
@@ -68,7 +68,12 @@ export const restartCore = () => driver().system.restartCore()
 export const upgradeCore = (channel: 'release' | 'alpha' | 'auto') =>
   driver().system.upgradeCore(channel)
 
-export const upgradeUI = () => driver().system.upgradeUI()
+export const upgradeUI = () =>
+  Promise.reject(
+    new Error(
+      '当前为统计定制版，请从 aparcho/zashboard 构建升级，避免官方 dist 覆盖统计功能。参见 docs/统计服务.md。',
+    ),
+  )
 
 const probeBackendVersion = async (backend: Backend) => {
   const startAt = Date.now()
@@ -153,7 +158,5 @@ export const checkUIUpdate = async () => {
 
   isUIUpdateAvailable.value = Boolean(tag_name && tag_name !== `v${zashboardVersion.value}`)
 
-  if (isUIUpdateAvailable.value && autoUpgradeDashboard.value) {
-    upgradeUI().catch(() => {})
-  }
+  // 定制版保留上游更新提示，通过 Fork 合并、构建及发布升级。
 }

@@ -1,4 +1,8 @@
 <template>
+  <p class="base-container m-3 p-3 text-sm">
+    统计定制版通过 aparcho/zashboard 合并上游并重新构建升级；内核更新不受影响。请勿使用官方 dist
+    覆盖，详见 docs/统计服务.md。
+  </p>
   <template v-if="hasVisibleApplicationItems">
     <div class="settings-section-label">{{ $t('settingsSectionApplication') }}</div>
     <div class="settings-grid">
@@ -26,7 +30,9 @@
       >
         <div class="setting-item-label">{{ $t('autoUpgradeDashboard') }}</div>
         <input
-          v-model="autoUpgradeDashboard"
+          :checked="false"
+          disabled
+          title="统计定制版通过 Fork 构建升级"
           class="toggle"
           type="checkbox"
         />
@@ -215,7 +221,6 @@ import { isMiddleScreen } from '@/helper/utils'
 import {
   autoDisconnectIdleUDP,
   autoDisconnectIdleUDPTime,
-  autoUpgradeDashboard,
   disablePullToRefresh,
   displayAllFeatures,
   geoipASNDatabaseURL,

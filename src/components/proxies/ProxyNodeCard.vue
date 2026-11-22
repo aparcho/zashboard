@@ -6,7 +6,7 @@
     <div
       class="w-full flex-1 text-sm"
       :class="truncateProxyName && 'truncate'"
-      @mouseenter="checkTruncation"
+      :title="node.name"
     >
       <ProxyIcon
         v-if="node?.icon"
