@@ -98,6 +98,16 @@ export enum PROXY_SORT_TYPE {
   LATENCY_DESC = 'latencydesc',
 }
 
+export enum PROXY_GROUP_SORT_TYPE {
+  DEFAULT = 'defaultsort',
+  NAME_ASC = 'nameasc',
+  NAME_DESC = 'namedesc',
+  LATENCY_ASC = 'latencyasc',
+  LATENCY_DESC = 'latencydesc',
+  TRAFFIC_DESC = 'trafficdesc',
+  TRAFFIC_ASC = 'trafficasc',
+}
+
 export enum PROXY_PREVIEW_TYPE {
   AUTO = 'auto',
   DOTS = 'dots',

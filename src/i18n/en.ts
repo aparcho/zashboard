@@ -49,7 +49,8 @@ const en = {
   chains: 'Chains',
   outbound: 'Outbound',
   proxyGroup: 'Proxy group',
-  sortBy: 'Sort by',
+  sortBy: 'Node sort by',
+  groupSortBy: 'Group sort by',
   sortAToZ: 'A → Z',
   sortZToA: 'Z → A',
   sortLargestFirst: 'Largest first',
@@ -137,6 +138,8 @@ const en = {
   nameasc: 'Name ascending',
   namedesc: 'Name descending',
   latencydesc: 'Latency descending',
+  trafficdesc: 'Traffic descending',
+  trafficasc: 'Traffic ascending',
   latencyasc: 'Latency ascending',
 
   language: 'Language',

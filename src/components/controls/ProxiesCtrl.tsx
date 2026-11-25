@@ -9,7 +9,13 @@ import {
   updateProxyProvider,
 } from '@/assembly/proxies'
 import { useCtrlsBar } from '@/composables/use-ctrls-bar'
-import { PROXY_SORT_TYPE, PROXY_TAB_TYPE, ROUTE_NAME, SETTINGS_MENU_KEY } from '@/constant'
+import {
+  PROXY_GROUP_SORT_TYPE,
+  PROXY_SORT_TYPE,
+  PROXY_TAB_TYPE,
+  ROUTE_NAME,
+  SETTINGS_MENU_KEY,
+} from '@/constant'
 import { renderProxiesPageItems } from '@/helper/proxies'
 import { isProxyNodeSearchMode, toggleProxySearchMode } from '@/helper/proxy-search'
 import { getMinCardWidth } from '@/helper/utils'
@@ -25,6 +31,7 @@ import {
   manageHiddenGroup,
   minProxyCardWidth,
   proxyCardSize,
+  proxyGroupSortType,
   proxySortType,
   twoColumnProxyGroup,
   useSmartGroupSort,
@@ -176,6 +183,19 @@ export default defineComponent({
           }))}
         />
       )
+      const groupSort = (
+        <SelectInput
+          class={['select select-sm']}
+          modelValue={proxyGroupSortType.value}
+          onUpdate:modelValue={(value) =>
+            (proxyGroupSortType.value = value as PROXY_GROUP_SORT_TYPE)
+          }
+          options={Object.values(PROXY_GROUP_SORT_TYPE).map((value) => ({
+            value,
+            label: t(value),
+          }))}
+        />
+      )
       const sort = (
         <SelectInput
           class={['select select-sm']}
@@ -260,6 +280,10 @@ export default defineComponent({
           >
             <div class="flex flex-col gap-3 text-sm">
               <div class="settings-grid">
+                <div class="setting-item">
+                  <div class="setting-item-label">{t('groupSortBy')}</div>
+                  {groupSort}
+                </div>
                 <div class="setting-item">
                   <div class="setting-item-label">{t('sortBy')}</div>
                   {sort}

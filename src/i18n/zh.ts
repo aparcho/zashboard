@@ -51,7 +51,8 @@ const zh: LANG_MESSAGE = {
   chains: '代理链',
   outbound: '出站节点',
   proxyGroup: '策略组',
-  sortBy: '排序方式',
+  sortBy: '节点排序',
+  groupSortBy: '代理组排序',
   sortAToZ: 'A → Z',
   sortZToA: 'Z → A',
   sortLargestFirst: '从大到小',
@@ -139,6 +140,8 @@ const zh: LANG_MESSAGE = {
   nameasc: '按名称升序',
   namedesc: '按名称降序',
   latencydesc: '按延迟降序',
+  trafficdesc: '按流量降序',
+  trafficasc: '按流量升序',
   latencyasc: '按延迟升序',
 
   language: '面板语言',

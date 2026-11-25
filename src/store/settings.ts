@@ -17,6 +17,7 @@ import {
   OVERVIEW_CARD,
   PROXY_CARD_SIZE,
   PROXY_CHAIN_DIRECTION,
+  PROXY_GROUP_SORT_TYPE,
   PROXY_PREVIEW_TYPE,
   PROXY_SEARCH_MODE,
   PROXY_SORT_TYPE,
@@ -332,6 +333,10 @@ export const proxyProviderSearchMode = useStorage<PROXY_SEARCH_MODE>(
 export const proxySortType = useStorage<PROXY_SORT_TYPE>(
   'config/proxy-sort-type',
   PROXY_SORT_TYPE.DEFAULT,
+)
+export const proxyGroupSortType = useStorage<PROXY_GROUP_SORT_TYPE>(
+  'config/proxy-group-sort-type',
+  PROXY_GROUP_SORT_TYPE.DEFAULT,
 )
 export const automaticDisconnection = useStorage('config/automatic-disconnection', true)
 export const truncateProxyName = useStorage('config/truncate-proxy-name', true)

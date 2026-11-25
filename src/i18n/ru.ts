@@ -51,7 +51,8 @@ const ru: LANG_MESSAGE = {
   chains: 'Цепочки',
   outbound: 'Исходящий',
   proxyGroup: 'Группа прокси',
-  sortBy: 'Сортировать по',
+  sortBy: 'Сортировка узлов',
+  groupSortBy: 'Сортировка групп',
   sortAToZ: 'А → Я',
   sortZToA: 'Я → А',
   sortLargestFirst: 'Сначала большие',
@@ -139,6 +140,8 @@ const ru: LANG_MESSAGE = {
   nameasc: 'Имя по возрастанию',
   namedesc: 'Имя по убыванию',
   latencydesc: 'Задержка по убыванию',
+  trafficdesc: 'Трафик по убыванию',
+  trafficasc: 'Трафик по возрастанию',
   latencyasc: 'Задержка по возрастанию',
 
   language: 'Язык',
